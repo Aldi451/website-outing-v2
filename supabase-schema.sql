@@ -96,8 +96,47 @@ alter table public.consumption add column if not exists created_at timestamptz d
 alter table public.outing_categories add column if not exists created_at timestamptz default now();
 
 -- Pindahkan nomor telepon dari kolom lama, lalu rapikan kolomnya.
+-- Catatan: project lama memakai enum member_status untuk participants.status
+-- sehingga UPDATE status='Ikut' gagal dengan error 22P02 invalid input value
+-- for enum member_status. Blok di bawah mengubah enum menjadi text terlebih
+-- dulu agar migrasi idempotent dan bisa dijalankan ulang.
 do $$
 begin
+  -- 0) Jika status/payment masih bertipe enum (member_status dkk), ubah ke text
+  if exists (
+    select 1 from pg_attribute a
+    join pg_class c on c.oid = a.attrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_type t on t.oid = a.atttypid
+    where n.nspname = 'public' and c.relname = 'participants' and a.attname = 'status' and t.typtype = 'e'
+  ) then
+    execute 'alter table public.participants alter column status drop default';
+    execute 'alter table public.participants alter column status type text using status::text';
+    execute 'alter table public.participants alter column status set default ''Ikut''';
+  end if;
+
+  if exists (
+    select 1 from pg_attribute a
+    join pg_class c on c.oid = a.attrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_type t on t.oid = a.atttypid
+    where n.nspname = 'public' and c.relname = 'participants' and a.attname = 'payment' and t.typtype = 'e'
+  ) then
+    execute 'alter table public.participants alter column payment drop default';
+    execute 'alter table public.participants alter column payment type text using payment::text';
+    execute 'alter table public.participants alter column payment set default ''Belum bayar''';
+  end if;
+
+  -- Fallback generik: paksa ke text untuk tipe enum apa pun, abaikan jika sudah text
+  begin
+    execute 'alter table public.participants alter column status type text using status::text';
+  exception when others then null;
+  end;
+  begin
+    execute 'alter table public.participants alter column payment type text using payment::text';
+  exception when others then null;
+  end;
+
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'participants' and column_name = 'member_id'
@@ -107,8 +146,15 @@ begin
 
   execute 'update public.participants set phone = ''-'' where phone is null or phone = ''''';
   execute 'alter table public.participants alter column phone set not null';
-  execute 'update public.participants set status = ''Ikut'' where status is null or status not in (''Ikut'',''Batal ikut'',''Tidak ikut'')';
-  execute 'update public.participants set payment = ''Belum bayar'' where payment is null or payment not in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar'')';
+  -- pakai ::text agar aman baik untuk kolom text maupun sisa enum yang belum terkonversi
+  execute 'update public.participants set status = ''Ikut'' where status::text is null or status::text not in (''Ikut'',''Batal ikut'',''Tidak ikut'')';
+  execute 'update public.participants set payment = ''Belum bayar'' where payment::text is null or payment::text not in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar'')';
+  -- pastikan default sudah text sebelum NOT NULL
+  begin
+    execute 'alter table public.participants alter column status set default ''Ikut''';
+    execute 'alter table public.participants alter column payment set default ''Belum bayar''';
+  exception when others then null;
+  end;
   execute 'alter table public.participants alter column status set not null';
   execute 'alter table public.participants alter column payment set not null';
 
@@ -122,6 +168,35 @@ begin
 
   execute 'alter table public.participants drop column if exists member_id';
   execute 'alter table public.participants drop column if exists member_password';
+end $$;
+
+-- Bersihkan tipe enum lama yang sudah tidak dipakai (member_status dari template lama).
+-- Jika masih dipakai di tempat lain, DROP akan diabaikan.
+do $$
+begin
+  if exists (select 1 from pg_type where typname = 'member_status' and typnamespace = 'public'::regnamespace) then
+    begin
+      execute 'drop type public.member_status';
+    exception when others then null;
+    end;
+  end if;
+end $$;
+
+-- Pastikan constraint text ada untuk migrasi (CREATE IF NOT EXISTS tidak menambah constraint di tabel lama).
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'participants_status_text_check' and conrelid = 'public.participants'::regclass) then
+    begin
+      execute 'alter table public.participants add constraint participants_status_text_check check (status in (''Ikut'',''Batal ikut'',''Tidak ikut''))';
+    exception when others then null;
+    end;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'participants_payment_text_check' and conrelid = 'public.participants'::regclass) then
+    begin
+      execute 'alter table public.participants add constraint participants_payment_text_check check (payment in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar''))';
+    exception when others then null;
+    end;
+  end if;
 end $$;
 
 -- ------------------------------------------------------------------ 3. RLS ---
