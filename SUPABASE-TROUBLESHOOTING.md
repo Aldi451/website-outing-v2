@@ -86,9 +86,16 @@ session email/password Supabase.
     where email = 'admin@domainanda.com';
    ```
 
-   Praktisnya: ganti email di `supabase-set-admin.sql`, jalankan seluruh isinya di
+   Praktisnya: ganti email di `supabase-set-admin.sql` (dua baris bertanda
+   `<<< GANTI EMAIL DI SINI`, isinya sama), lalu jalankan **seluruh** isinya di
    SQL Editor — file itu mengeset role admin sekaligus memverifikasi role, grant,
-   dan policy tulis keenam tabel.
+   dan policy tulis keenam tabel dalam satu tabel hasil.
+
+   > **Error `42601: syntax error at or near "\"`?** Versi lama file itu memakai
+   > `\set admin_email '...'`. `\set` adalah *meta-command* psql, bukan SQL, jadi
+   > Supabase SQL Editor (yang mengirim teks apa adanya ke Postgres) langsung
+   > menolaknya. File versi sekarang sudah SQL murni tanpa `\set` — unduh/pakai
+   > versi terbaru. Jangan menaruh baris apa pun yang diawali `\` di SQL Editor.
 
 3. Login di aplikasi memakai **email + password Supabase** itu (bukan `admin/power88`).
    Kalau akun belum punya role admin, aplikasi akan menolak dengan pesan
