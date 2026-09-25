@@ -28,7 +28,7 @@
     .btn.primary { background: #0e9f9a; color: #fff; }
     .wide { width: 100%; display: flex; justify-content: space-between; }
   </style>
-  <link id="app-styles" rel="stylesheet" href="styles.css?v=3" />
+  <link id="app-styles" rel="stylesheet" href="styles.css?v=4" />
   <script>
     /* InfinityFree / free-hosting guard.
        Free hosting runs a "Browser Security System": when its check has not finished
@@ -40,7 +40,7 @@
        reloads once so the security cookie can be set. Remove only if your host
        always sends correct MIME types. */
     (function () {
-      var CSS_HREF = 'styles.css?v=3';
+      var CSS_HREF = 'styles.css?v=4';
       var MAX_TRIES = 2;
       var tries = 0;
 
@@ -147,6 +147,7 @@
         </div>
         <div class="top-actions">
           <span id="connection-status" class="status-pill">Local mode</span>
+          <button id="sync-diagnose" class="btn ghost admin-only">🩺 Cek Supabase</button>
           <button id="sync-now" class="btn ghost admin-only">↻ Upload ke Supabase</button>
           <button id="quick-add" class="btn primary admin-only">+ Tambah data</button>
         </div>
@@ -163,11 +164,27 @@
     </form>
   </dialog>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js?v=3"></script>
-  <script src="supabase-sync.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script>
+    /* CDN fallback: some networks block cdn.jsdelivr.net, which used to leave the
+       app without window.supabase (so nothing could be written to Supabase) and
+       without XLSX/jsPDF (import/export disabled). If the primary script fails,
+       the same library is loaded from unpkg instead. */
+    function outingCdnFallback(globalName, fallbackUrl) {
+      return function () {
+        if (window[globalName]) return;
+        console.warn('Gagal memuat ' + globalName + ' dari jsDelivr, mencoba unpkg...');
+        var script = document.createElement('script');
+        script.src = fallbackUrl;
+        script.onerror = function () { console.error('Gagal memuat ' + globalName + ' dari kedua CDN.'); };
+        document.head.appendChild(script);
+      };
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="outingCdnFallback('supabase', 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js')()"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="outingCdnFallback('XLSX', 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js')()"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" onerror="outingCdnFallback('jspdf', 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js')()"></script>
+  <script src="config.js?v=4"></script>
+  <script src="supabase-sync.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

@@ -312,3 +312,16 @@ dialog::backdrop { background: rgba(16, 35, 45, .42); }
   .rundown-toolbar .btn:first-child { grid-column: auto; }
   .rundown-item { grid-template-columns: 76px minmax(0, 1fr); }
 }
+
+/* Supabase diagnosis report */
+.report { display: grid; gap: 12px; }
+.report-note { margin: 0; padding: 11px 13px; border-radius: 10px; background: #f2faf7; color: #3f6a61; font-size: 12px; line-height: 1.55; }
+.report-note.ok { background: #e3f7ee; color: #18845b; }
+.report-note.bad { background: #ffe6e4; color: #a54545; }
+.diagnose-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.diagnose-table th { padding: 8px 9px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; text-align: left; text-transform: uppercase; letter-spacing: .6px; }
+.diagnose-table td { padding: 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.diagnose-table td small { display: block; margin-top: 3px; line-height: 1.45; }
+.tag { display: inline-flex; align-items: center; min-height: 21px; padding: 3px 8px; border-radius: 99px; background: #edf1f2; color: #65727b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.tag.ok { background: #e3f7ee; color: #18845b; }
+.tag.bad { background: #ffe6e4; color: #b44d4d; }

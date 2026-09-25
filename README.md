@@ -24,6 +24,7 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Semua perubahan dat
 - Import XLSX/CSV serta download template Excel untuk peserta, rundown, pembelian, dan konsumsi.
 - Tampilan responsif dengan menu mobile dan daftar data yang lebih mudah dibaca di layar kecil.
 - CSS fallback inline + guard anti-MIME di `index.html`, sehingga halaman tetap tampil rapi di hosting gratisan yang kadang mengirim file CSS sebagai `text/html`.
+- Sinkronisasi Supabase per tabel: nama tabel yang gagal dilaporkan, tanggal/angka dari Excel dinormalisasi sebelum upload, dan tombol **🩺 Cek Supabase** menampilkan hasil diagnosa per tabel.
 - Data demo tersimpan di `localStorage` browser, sehingga ringan dan langsung digunakan.
 
 ## Upload ke InfinityFree
@@ -64,6 +65,10 @@ Aplikasi akan memuat data dari Supabase saat dibuka dan menyinkronkan setiap tam
 Jalankan `supabase-schema.sql` di SQL Editor Supabase untuk membuat tabel dan policy dasar. Schema tersebut juga berisi migrasi untuk database lama yang masih memakai `member_id` dan `member_password`.
 
 Agar write dari frontend diterima RLS, buat user admin di Supabase Authentication, isi `app_metadata` user tersebut dengan `{ "role": "admin" }`, lalu gunakan email/password Supabase saat login. `supabase-schema.sql` sudah menyediakan policy write berdasarkan claim admin tersebut. Login lokal `admin/power88` tetap dapat membuka aplikasi, tetapi tidak membawa session Supabase; jika dipakai saat RLS aktif, perubahan hanya tersimpan lokal dan akan muncul notifikasi gagal sinkronisasi.
+
+`supabase-schema.sql` aman dijalankan berulang kali dan memuat tiga opsi akses: (1) baca publik + tulis admin Supabase (default), (2) baca & tulis hanya via akun Supabase, (3) izinkan `anon` menulis tanpa akun Supabase (paling cepat, tetapi siapa pun yang membuka website bisa mengubah data).
+
+Kalau data hanya tersimpan lokal, tekan tombol **🩺 Cek Supabase** (admin) untuk melihat tabel mana yang gagal beserta sebabnya, dan jalankan `supabase-diagnose.sql` di SQL Editor. Penjelasan lengkap penyebabnya ada di [`SUPABASE-TROUBLESHOOTING.md`](SUPABASE-TROUBLESHOOTING.md).
 
 Jangan memasukkan `service_role key` ke frontend.
 

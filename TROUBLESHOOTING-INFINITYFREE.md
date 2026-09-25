@@ -106,6 +106,12 @@ node tools/build-standalone.mjs
 File ini tetap memuat library CDN (Supabase JS, xlsx, jsPDF), jadi koneksi internet tetap
 dibutuhkan untuk fitur export/import dan sinkronisasi Supabase — sama seperti versi biasa.
 
+## Masalah lain di hosting gratis
+
+Kalau yang bermasalah bukan tampilan, melainkan data yang tidak terkirim ke Supabase
+(selalu tersimpan lokal saja), penyebabnya berbeda dan ada di sisi Supabase/RLS —
+lihat [`SUPABASE-TROUBLESHOOTING.md`](SUPABASE-TROUBLESHOOTING.md).
+
 ## Kalau masih tidak terbaca
 
 Kirimkan 3 informasi ini agar bisa dipastikan penyebabnya:
