@@ -28,7 +28,7 @@
         </label>
         <button class="btn primary wide" type="submit">Masuk <span aria-hidden="true">→</span></button>
       </form>
-      <div class="login-note"><b>Info:</b> peserta tidak perlu dibuatkan akun atau password. Admin dapat mengatur daftar peserta dan rundown.</div>
+      <div class="login-note"><b>Info:</b> peserta tidak perlu dibuatkan akun atau password. Untuk upload ke Supabase, gunakan email/password admin Supabase dengan role admin.</div>
     </div>
   </section>
 
@@ -60,6 +60,7 @@
         </div>
         <div class="top-actions">
           <span id="connection-status" class="status-pill">Local mode</span>
+          <button id="sync-now" class="btn ghost admin-only">↻ Upload ke Supabase</button>
           <button id="quick-add" class="btn primary admin-only">+ Tambah data</button>
         </div>
       </header>

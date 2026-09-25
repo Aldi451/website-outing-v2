@@ -1111,6 +1111,21 @@ $('#quick-add')?.addEventListener('click', () => {
   openDialog(type);
 });
 
+$('#sync-now')?.addEventListener('click', async () => {
+  if (!isAdmin()) return showToast('Hanya admin yang dapat upload data.');
+  if (!window.OUTING_SYNC?.queue) {
+    showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+    return;
+  }
+  const button = $('#sync-now');
+  button.disabled = true;
+  button.textContent = '⟳ Mengupload...';
+  const result = await window.OUTING_SYNC.queue(db);
+  button.disabled = false;
+  button.textContent = '↻ Upload ke Supabase';
+  showSyncResult(result, 'Semua data berhasil diupload ke Supabase.');
+});
+
 $('#data-form')?.addEventListener('submit', handleFormSubmit);
 $('#data-dialog')?.addEventListener('click', (event) => {
   if (event.target === $('#data-dialog') && event.target.open) closeDialog();

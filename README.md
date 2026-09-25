@@ -36,7 +36,7 @@ Library Excel dan PDF dimuat dari CDN. Jika jaringan CDN diblokir, login dan CRU
 
 ## Supabase (wajib untuk data bersama)
 
-Aplikasi akan memuat data dari Supabase saat dibuka dan menyinkronkan setiap tambah, edit, hapus, serta import ke Supabase. Data yang disinkronkan mencakup peserta, outing, rundown, pembelian, konsumsi, kategori custom, dan foto bukti yang tersimpan di kolom `photo_url`.
+Aplikasi akan memuat data dari Supabase saat dibuka dan menyinkronkan setiap tambah, edit, hapus, serta import ke Supabase. Admin juga dapat menekan tombol **Upload ke Supabase** untuk mengirim ulang seluruh data lokal. Data yang disinkronkan mencakup peserta, outing, rundown, pembelian, konsumsi, kategori custom, dan foto bukti yang tersimpan di kolom `photo_url`.
 
 Jalankan `supabase-schema.sql` di SQL Editor Supabase untuk membuat tabel dan policy dasar. Schema tersebut juga berisi migrasi untuk database lama yang masih memakai `member_id` dan `member_password`.
 
