@@ -8,7 +8,7 @@ Website ringan untuk pengelolaan outing yang dapat dijalankan langsung di Infini
 - Mode lihat: `member` / `member`
 - Admin **online**: email/password yang dibuat di Supabase Authentication dengan `app_metadata.role = "admin"`.
 
-Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama di Supabase hanya dapat dilakukan admin online; password lokal yang ada di JavaScript bukan pengaman database.
+Mode lihat (member) dapat membaca informasi outing, rundown, **daftar peserta lengkap di dashboard**, serta **rincian pembelian barang dan konsumsi beserta foto buktinya** — semuanya tanpa tombol tambah/edit/hapus. Perubahan bersama di Supabase hanya dapat dilakukan admin online; password lokal yang ada di JavaScript bukan pengaman database. Kalau rincian biaya/foto tidak boleh dilihat member, kembalikan `expenses` dan `consumption` ke `ADMIN_PAGES` di `app.js` dan beri kelas `admin-only` pada tombol navigasinya di `index.html`.
 
 ## Fitur
 
@@ -18,6 +18,8 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama d
 - Status pembayaran tetap tersedia untuk kebutuhan administrasi outing.
 - Rundown outing dengan waktu, agenda, lokasi, PIC, dan catatan.
 - Admin dapat menambah, mengedit, menghapus, serta import rundown melalui Excel. Peserta/member hanya dapat melihat rundown.
+- Dashboard menampilkan **seluruh** daftar peserta (bukan hanya beberapa baris pertama) dengan filter pencarian di halaman Data Peserta.
+- Halaman Pembelian Barang dan Konsumsi dapat dibuka semua login: kolom foto bukti berupa pratinjau yang bisa diklik untuk melihat foto ukuran penuh (dialog rincian berisi tanggal, item, kategori, jumlah, dan bukti foto, lengkap dengan tombol Sebelumnya/Berikutnya). Hanya admin yang melihat kolom Aksi dan tombol tambah data.
 - Data tujuan, tanggal, dan catatan outing.
 - Pembelian barang dan konsumsi dengan kategori bawaan atau custom.
 - Upload foto bukti dengan kompresi JPEG di browser.

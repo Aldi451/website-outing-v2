@@ -3,7 +3,7 @@ const DEFAULT_ADMIN = { userId: 'admin', password: 'power88' };
 const DEFAULT_MEMBER = { userId: 'member', password: 'member' };
 const PARTICIPANT_STATUSES = ['Ikut', 'Batal ikut', 'Tidak ikut'];
 const PAYMENT_STATUSES = ['Belum bayar', 'Bayar sebagian', 'Sudah bayar'];
-const ADMIN_PAGES = ['participants', 'expenses', 'consumption', 'reports'];
+const ADMIN_PAGES = ['participants', 'reports'];
 const ADDABLE_PAGES = ['participants', 'rundown', 'expenses', 'consumption'];
 
 const DEFAULT_DB = {
@@ -247,6 +247,10 @@ function sortedRundown() {
   return [...(db.rundown || [])].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
 }
 
+// Mount point of the currently open report/detail dialog, so delegated handlers
+// can read what is being shown without stuffing base64 into HTML attributes.
+const $reportData = { __item: null };
+
 async function login(event) {
   event.preventDefault();
   const userId = $('#login-id').value.trim();
@@ -364,6 +368,7 @@ function renderDashboard() {
   const paid = participants.filter((participant) => participant.payment === 'Sudah bayar').length;
   const scheduleCount = (db.rundown || []).length;
   const upcoming = sortedRundown().slice(0, 4);
+  const ledgerTotal = ledgerTotalAmount();
 
   return `
     <div class="page-grid">
@@ -428,10 +433,45 @@ function renderDashboard() {
         </div>
       </div>
       <div class="table-wrap">
-        ${renderParticipantTable(participants.slice(0, 6), isAdmin())}
+        ${renderParticipantTable(participants, isAdmin())}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">BIAYA</p>
+          <h3>Pembelian &amp; konsumsi</h3>
+        </div>
+        <span class="status-pill">Total ${formatMoney(ledgerTotal)}</span>
+      </div>
+      <div class="page-grid">
+        <div class="card stat-card">
+          <span class="stat-icon">▣</span>
+          <span class="stat-label">Pembelian barang</span>
+          <div class="stat-value">${(db.expenses || []).length}</div>
+          <small class="muted">Total ${formatMoney(ledgerTotalAmount('expenses'))}</small>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-icon">◉</span>
+          <span class="stat-label">Konsumsi</span>
+          <div class="stat-value">${(db.consumption || []).length}</div>
+          <small class="muted">Total ${formatMoney(ledgerTotalAmount('consumption'))}</small>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="link-btn" data-action="go-expenses">Rincian pembelian barang <span aria-hidden="true">→</span></button>
+        <button class="link-btn" data-action="go-consumption">Rincian konsumsi <span aria-hidden="true">→</span></button>
       </div>
     </div>
   `;
+}
+
+/** Total of one ledger (expenses/consumption) or of both together. */
+function ledgerTotalAmount(type) {
+  const sum = (rows) => (rows || []).reduce((total, item) => total + Number(item.amount || 0), 0);
+  if (type) return sum(db[type]);
+  return sum(db.expenses) + sum(db.consumption);
 }
 
 function renderParticipants() {
@@ -570,19 +610,21 @@ function renderRundownCard(item, showActions = false) {
   `;
 }
 
-function renderLedger(type, title) {
+function renderLedger(type, title, subtitle) {
   const rows = db[type] || [];
   const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const admin = isAdmin();
 
   return `
-    <div class="page-toolbar toolbar">
+    <div class="ledger-intro card">
       <div>
         <p class="section-kicker">${escapeHtml(title).toUpperCase()}</p>
-        <h3 class="toolbar-title">${escapeHtml(rows.length)} data tersimpan</h3>
+        <h3>${escapeHtml(subtitle || title)}</h3>
+        <p class="muted">Setiap item dilengkapi kategori, jumlah, dan foto bukti. Foto dibuka dengan menekan pratinjaunya.</p>
       </div>
       <div class="toolbar toolbar-right">
-        <span class="status-pill">Total ${formatMoney(total)}</span>
-        <button class="btn primary" data-add="${type}">+ Tambah data</button>
+        <span class="status-pill">${escapeHtml(rows.length)} data · Total ${formatMoney(total)}</span>
+        ${admin ? `<button class="btn primary" data-add="${type}">+ Tambah data</button>` : '<span class="status-pill readonly-pill">Mode lihat</span>'}
       </div>
     </div>
     <div class="section">
@@ -595,8 +637,8 @@ function renderLedger(type, title) {
                 <th>Item</th>
                 <th>Kategori</th>
                 <th>Jumlah</th>
-                <th>Foto</th>
-                <th>Aksi</th>
+                <th>Foto bukti</th>
+                ${admin ? '<th>Aksi</th>' : ''}
               </tr>
             </thead>
             <tbody>
@@ -606,27 +648,95 @@ function renderLedger(type, title) {
                   <td data-label="Item"><b>${escapeHtml(item.item || '-')}</b></td>
                   <td data-label="Kategori">${escapeHtml(item.category || '-')}</td>
                   <td data-label="Jumlah">${formatMoney(item.amount)}</td>
-                  <td data-label="Foto">${item.photo ? '<span class="badge success">Ada foto</span>' : '-'}</td>
+                  <td data-label="Foto bukti">${renderLedgerPhoto(item, type)}</td>
+                  ${admin ? `
                   <td data-label="Aksi" class="actions">
                     <button class="link-btn" data-edit="${escapeHtml(item.id)}" data-type="${type}">Edit</button>
                     <button class="link-btn danger-link" data-delete="${escapeHtml(item.id)}" data-type="${type}">Hapus</button>
                   </td>
+                  ` : ''}
                 </tr>
               `).join('')}
             </tbody>
           </table>
-        ` : '<div class="empty">Belum ada data.</div>'}
+        ` : '<div class="empty">Belum ada data pembelian/konsumsi yang bisa ditampilkan.</div>'}
       </div>
     </div>
   `;
 }
 
+/**
+ * Receipt thumbnail for a ledger row. `detailIndex` lets the delegated click
+ * handler open the full-size photo without embedding base64 in an attribute.
+ */
+function renderLedgerPhoto(item, type, detailIndex) {
+  if (!item.photo) return '<span class="muted">Tanpa foto</span>';
+  const index = detailIndex === undefined ? (db[type] || []).findIndex((row) => row.id === item.id) : detailIndex;
+  return `
+    <button type="button" class="receipt-thumb" data-receipt="${escapeHtml(type)}" data-receipt-index="${index}"
+            title="Lihat foto bukti" aria-label="Lihat foto bukti ${escapeHtml(item.item || '')}">
+      <img src="${escapeHtml(item.photo)}" alt="Foto bukti ${escapeHtml(item.item || '')}" loading="lazy">
+    </button>`;
+}
+
 function renderExpenses() {
-  return renderLedger('expenses', 'Pembelian barang');
+  return renderLedger('expenses', 'Pembelian barang', 'Rincian pembelian dan foto bukti');
 }
 
 function renderConsumption() {
-  return renderLedger('consumption', 'Konsumsi');
+  return renderLedger('consumption', 'Konsumsi', 'Rincian konsumsi dan foto bukti');
+}
+
+/** Read-only detail so members can inspect a purchase/consumption item. */
+function openLedgerDetail(type, id) {
+  const list = db[type] || [];
+  const index = id && !/^\d+$/.test(String(id))
+    ? list.findIndex((row) => row.id === id)
+    : Number(id);
+  const item = index >= 0 ? list[index] : null;
+  if (!item) return showToast('Data tidak ditemukan. Muat ulang halaman lalu coba lagi.');
+  openItemDetailDialog(item, { type, index });
+}
+
+function openItemDetailDialog(item, { type, index }) {
+  const title = type === 'expenses' ? 'Rincian pembelian barang' : 'Rincian konsumsi';
+  const rows = [
+    ['Tanggal', formatDate(item.date)],
+    ['Item', item.item || '-'],
+    ['Kategori', item.category || '-'],
+    ['Jumlah', formatMoney(item.amount)],
+    ['Bukti foto', item.photo ? 'Foto tersedia' : 'Belum ada foto']
+  ].map(([label, value]) => `
+    <div class="detail-row"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+
+  const photo = item.photo
+    ? `<figure class="receipt-figure">
+         <img src="${escapeHtml(item.photo)}" alt="Foto bukti ${escapeHtml(item.item || '')}">
+         <figcaption class="muted">Foto bukti pembelian/konsumsi</figcaption>
+       </figure>`
+    : '<p class="report-note">Belum ada foto bukti untuk item ini.</p>';
+
+  $reportData.__item = { item, type, index };
+  openReportDialog(title, `
+    <div class="report">
+      <div class="detail-grid">${rows}</div>
+      ${photo}
+      <div class="toolbar">
+        <button type="button" class="btn ghost" data-action="receipt-prev">← Sebelumnya</button>
+        <button type="button" class="btn ghost" data-action="receipt-next">Berikutnya →</button>
+      </div>
+      <p class="muted">Halaman rincian ini hanya membaca data; tidak ada perubahan yang dikirim ke Supabase.</p>
+    </div>`);
+}
+
+/** Prev/next within the same ledger, keeping the detail dialog open. */
+function openLedgerDetailStep(step) {
+  const current = $reportData.__item;
+  if (!current) return;
+  const list = db[current.type] || [];
+  if (!list.length) return;
+  const next = (current.index + step + list.length) % list.length;
+  openItemDetailDialog(list[next], { type: current.type, index: next });
 }
 
 function renderReports() {
@@ -765,6 +875,12 @@ function showDialogElement(dialog) {
   else dialog.setAttribute('open', '');
 }
 
+function closeDialogElement(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === 'function') dialog.close();
+  else dialog.removeAttribute('open');
+}
+
 function openDialog(type, id = null) {
   if (!isAdmin()) {
     showToast('Hanya admin yang dapat mengubah data.');
@@ -797,7 +913,7 @@ function openReportDialog(title, html) {
   if (!dialog) return;
   // showModal() throws when the dialog is already open (e.g. a report triggered
   // while the data form is open), so reopen it deliberately instead.
-  if (dialog.open) dialog.close();
+  if (dialog.open) closeDialogElement(dialog);
   $('#dialog-title').textContent = title;
   dialog.dataset.type = 'report';
   $('#dialog-save').classList.add('hidden');
@@ -1064,7 +1180,7 @@ async function handleFormSubmit(event) {
 
 function closeDialog() {
   const dialog = $('#data-dialog');
-  if (dialog?.open) dialog.close();
+  if (dialog?.open) closeDialogElement(dialog);
   $('#data-form')?.reset();
   editingId = null;
 }
@@ -1457,6 +1573,20 @@ document.addEventListener('click', (event) => {
     currentPage = 'rundown';
     render();
   }
+  if (event.target.closest('[data-action="go-expenses"]')) {
+    currentPage = 'expenses';
+    render();
+  }
+  if (event.target.closest('[data-action="go-consumption"]')) {
+    currentPage = 'consumption';
+    render();
+  }
+
+  const receiptButton = event.target.closest('[data-receipt]');
+  if (receiptButton) openLedgerDetail(receiptButton.dataset.receipt, receiptButton.dataset.receiptIndex);
+
+  if (event.target.closest('[data-action="receipt-prev"]')) openLedgerDetailStep(-1);
+  if (event.target.closest('[data-action="receipt-next"]')) openLedgerDetailStep(1);
 });
 
 document.addEventListener('input', (event) => {

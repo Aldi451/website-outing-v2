@@ -230,6 +230,20 @@ dialog::backdrop { background: rgba(16, 35, 45, .42); }
 .readonly-grid { padding-bottom: 0; }
 .dialog-actions { justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--line); }
 
+/* Ledger detail (receipt evidence) */
+.ledger-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.ledger-intro h3 { margin: 4px 0 6px; }
+.receipt-thumb { padding: 0; border: 1px solid var(--line); border-radius: 10px; background: none; line-height: 0; overflow: hidden; }
+.receipt-thumb img { width: 76px; height: 56px; object-fit: cover; }
+.receipt-thumb:hover { border-color: #9dc9bb; transform: translateY(-1px); }
+.receipt-thumb:focus-visible { outline: 2px solid #18845b; outline-offset: 2px; }
+.detail-grid { display: grid; gap: 8px; }
+.detail-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+.detail-row span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.receipt-figure { margin: 0; display: grid; gap: 8px; }
+.receipt-figure img { width: 100%; max-height: 60vh; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: #f7f9f9; }
+.receipt-figure figcaption { font-size: 11px; }
+
 /* Notifications */
 .toast { position: fixed; z-index: 50; top: 22px; right: 22px; max-width: min(360px, calc(100% - 32px)); padding: 13px 17px; border-radius: 10px; background: var(--ink); color: #fff; opacity: 0; transform: translateY(-8px); pointer-events: none; transition: .25s ease; }
 .toast.show { opacity: 1; transform: none; }
@@ -284,6 +298,9 @@ dialog::backdrop { background: rgba(16, 35, 45, .42); }
   .rundown-meta { display: grid; gap: 3px; }
   .rundown-actions { grid-column: 2; justify-self: start; padding-top: 8px; }
   .readonly-pill { margin-top: 12px; }
+  .ledger-intro { display: block; }
+  .ledger-intro .toolbar-right { margin-top: 12px; }
+  .receipt-thumb img { width: 64px; height: 48px; }
   .import-toolbar { align-items: stretch; }
   .import-toolbar > * { width: 100%; }
   .table-wrap { overflow: visible; border: 0; background: transparent; }
