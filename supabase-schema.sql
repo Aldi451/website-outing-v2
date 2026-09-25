@@ -48,6 +48,12 @@ create table if not exists public.consumption (
   created_at timestamptz default now()
 );
 
+-- Kategori custom juga disimpan agar seluruh input aplikasi ikut tersinkron.
+create table if not exists public.outing_categories (
+  name text primary key,
+  created_at timestamptz default now()
+);
+
 -- Migrasi satu kali untuk database lama yang masih memakai member_id/member_password.
 -- Jalankan blok ini jika tabel participants sudah dibuat dari schema versi sebelumnya.
 do $$
@@ -71,12 +77,34 @@ alter table public.outing enable row level security;
 alter table public.rundown enable row level security;
 alter table public.expenses enable row level security;
 alter table public.consumption enable row level security;
+alter table public.outing_categories enable row level security;
 
 create policy "authenticated read participants" on public.participants for select to authenticated using (true);
 create policy "authenticated read outing" on public.outing for select to authenticated using (true);
 create policy "authenticated read rundown" on public.rundown for select to authenticated using (true);
 create policy "authenticated read expenses" on public.expenses for select to authenticated using (true);
 create policy "authenticated read consumption" on public.consumption for select to authenticated using (true);
+create policy "authenticated read outing categories" on public.outing_categories for select to authenticated using (true);
 
--- Tambahkan policy insert/update/delete hanya untuk admin sesuai email akun admin Anda.
+-- User admin Supabase harus memiliki app_metadata: {"role":"admin"}.
+-- Policy berikut membuat hanya user dengan claim tersebut yang dapat menulis data.
+create policy "admin write participants" on public.participants for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "admin write outing" on public.outing for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "admin write rundown" on public.rundown for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "admin write expenses" on public.expenses for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "admin write consumption" on public.consumption for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "admin write outing categories" on public.outing_categories for all to authenticated
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 -- Jangan simpan service_role key di frontend.

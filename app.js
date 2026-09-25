@@ -94,6 +94,7 @@ function normaliseDatabase(source = {}) {
       ? source.participants.map(normaliseParticipant)
       : clone(DEFAULT_DB.participants),
     outing: {
+      id: outing.id || '',
       destination: String(outing.destination || '').trim(),
       date: String(outing.date || outing.outing_date || '').trim(),
       description: String(outing.description || '').trim()
@@ -125,6 +126,18 @@ function loadDb() {
 
 function saveDb() {
   localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(db));
+  if (window.OUTING_SYNC?.queue) return window.OUTING_SYNC.queue(db);
+  return Promise.resolve({ ok: true, localOnly: true });
+}
+
+function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.') {
+  if (result?.ok && !result.localOnly) {
+    showToast(successMessage);
+  } else if (result?.ok) {
+    showToast('Data tersimpan di browser. Supabase belum dikonfigurasi.');
+  } else {
+    showToast('Data tersimpan lokal, tetapi belum masuk ke Supabase. Cek koneksi atau RLS.');
+  }
 }
 
 function showToast(message) {
@@ -208,12 +221,20 @@ function login(event) {
 
   const config = window.OUTING_CONFIG || {};
   if (config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase) {
-    window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY)
-      .auth.signInWithPassword({ email: userId, password })
+    const authClient = window.OUTING_SYNC?.client || window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+    authClient.auth.signInWithPassword({ email: userId, password })
       .then(({ data, error }) => {
         if (!error && data?.user) {
+          const role = data.user.app_metadata?.role;
+          if (role !== 'admin') {
+            authClient.auth.signOut();
+            showToast('Akun Supabase ini belum memiliki role admin.');
+            return;
+          }
           session = { role: 'admin', name: data.user.email || 'Admin Supabase' };
           startApp();
+          // Re-read Supabase using the authenticated session before the next input.
+          window.OUTING_SYNC?.load?.();
           return;
         }
         showToast('User ID atau password tidak sesuai.');
@@ -746,10 +767,10 @@ async function handleFormSubmit(event) {
       date: values.date,
       description: (values.description || '').trim()
     };
-    saveDb();
+    const syncResult = await saveDb();
     closeDialog();
     render();
-    showToast('Data outing berhasil disimpan.');
+    showSyncResult(syncResult, 'Data outing berhasil disimpan ke Supabase.');
     return;
   }
 
@@ -800,10 +821,10 @@ async function handleFormSubmit(event) {
     db[type] = list;
   }
 
-  saveDb();
+  const syncResult = await saveDb();
   closeDialog();
   render();
-  showToast('Data berhasil disimpan.');
+  showSyncResult(syncResult);
 }
 
 function closeDialog() {
@@ -813,7 +834,7 @@ function closeDialog() {
   editingId = null;
 }
 
-function deleteData(type, id) {
+async function deleteData(type, id) {
   if (!isAdmin()) {
     showToast('Hanya admin yang dapat menghapus data.');
     return;
@@ -822,9 +843,9 @@ function deleteData(type, id) {
 
   if (type === 'participants') db.participants = db.participants.filter((item) => item.id !== id);
   else db[type] = (db[type] || []).filter((item) => item.id !== id);
-  saveDb();
+  const syncResult = await saveDb();
   render();
-  showToast('Data berhasil dihapus.');
+  showSyncResult(syncResult, 'Data berhasil dihapus dari Supabase.');
 }
 
 function exportReport(kind) {
@@ -969,7 +990,7 @@ function importExcelFile(file, type) {
   }
 
   const reader = new FileReader();
-  reader.onload = (event) => {
+  reader.onload = async (event) => {
     try {
       const workbook = XLSX.read(event.target.result, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1029,9 +1050,9 @@ function importExcelFile(file, type) {
         });
       }
 
-      saveDb();
+      const syncResult = await saveDb();
       render();
-      showToast(`${imported} dari ${rows.length} data berhasil diimport.`);
+      showSyncResult(syncResult, `${imported} dari ${rows.length} data berhasil diimport ke Supabase.`);
     } catch (error) {
       console.error(error);
       showToast('Format file tidak valid. Cek template Excel Anda.');
@@ -1044,10 +1065,20 @@ function closeMobileMenu() {
   document.body.classList.remove('menu-open');
 }
 
+function applyRemoteData() {
+  db = loadDb();
+  if (session) render();
+}
+
+document.addEventListener('outing:remote-ready', applyRemoteData);
+if (window.OUTING_REMOTE_READY) applyRemoteData();
+if (window.OUTING_SYNC_READY) window.OUTING_SYNC_READY.then(applyRemoteData);
+
 const loginForm = $('#login-form');
 if (loginForm) loginForm.addEventListener('submit', login);
 
 $('#logout')?.addEventListener('click', () => {
+  window.OUTING_SYNC?.client?.auth.signOut();
   session = null;
   currentPage = 'dashboard';
   closeMobileMenu();

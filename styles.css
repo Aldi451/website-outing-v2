@@ -128,6 +128,8 @@ input:disabled, textarea:disabled { color: #51616a; background: #f8fafb; opacity
   font-weight: 700;
   white-space: nowrap;
 }
+.status-pill[data-tone="syncing"] { background: #fff5df; color: #a76b11; }
+.status-pill[data-tone="error"] { background: #ffe6e4; color: #b44d4d; }
 
 /* App shell */
 .sidebar {

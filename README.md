@@ -34,9 +34,13 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Semua perubahan dat
 
 Library Excel dan PDF dimuat dari CDN. Jika jaringan CDN diblokir, login dan CRUD lokal tetap bisa digunakan, tetapi fitur export/import membutuhkan koneksi CDN.
 
-## Supabase (opsional)
+## Supabase (wajib untuk data bersama)
 
-Jalankan `supabase-schema.sql` di SQL Editor Supabase untuk membuat tabel peserta, outing, rundown, pembelian, dan konsumsi. Schema tersebut juga berisi migrasi untuk database lama yang masih memakai `member_id` dan `member_password`. Tambahkan policy insert/update/delete yang membatasi akses hanya ke user admin.
+Aplikasi akan memuat data dari Supabase saat dibuka dan menyinkronkan setiap tambah, edit, hapus, serta import ke Supabase. Data yang disinkronkan mencakup peserta, outing, rundown, pembelian, konsumsi, kategori custom, dan foto bukti yang tersimpan di kolom `photo_url`.
+
+Jalankan `supabase-schema.sql` di SQL Editor Supabase untuk membuat tabel dan policy dasar. Schema tersebut juga berisi migrasi untuk database lama yang masih memakai `member_id` dan `member_password`.
+
+Agar write dari frontend diterima RLS, buat user admin di Supabase Authentication, isi `app_metadata` user tersebut dengan `{ "role": "admin" }`, lalu gunakan email/password Supabase saat login. `supabase-schema.sql` sudah menyediakan policy write berdasarkan claim admin tersebut. Login lokal `admin/power88` tetap dapat membuka aplikasi, tetapi tidak membawa session Supabase; jika dipakai saat RLS aktif, perubahan hanya tersimpan lokal dan akan muncul notifikasi gagal sinkronisasi.
 
 Jangan memasukkan `service_role key` ke frontend.
 
