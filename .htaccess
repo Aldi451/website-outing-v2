@@ -1,0 +1,9 @@
+# InfinityFree/static-hosting compatibility
+# Ensure CSS and JavaScript assets are served with the correct MIME types.
+<IfModule mod_mime.c>
+  AddType text/css .css
+  AddType application/javascript .js
+</IfModule>
+
+# Serve the application entry point when the domain root is opened.
+DirectoryIndex index.html
