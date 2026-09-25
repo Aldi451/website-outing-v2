@@ -7,18 +7,12 @@
 -- ============================================================================
 
 -- ------------------------------------------- 1. RINGKASAN TABEL & POLICY -----
-with expected(table_name, kolom_wajib) as (
-  values
-    ('participants', 'id,name,phone,status,payment'),
-    ('rundown', 'id,schedule_time,activity,location,pic,notes'),
-    ('expenses', 'id,date,item,category,amount,photo_url'),
-    ('consumption', 'id,date,item,category,amount,photo_url'),
-    ('outing', 'id,destination,outing_date,description'),
-    ('outing_categories', 'name')
+with expected(table_name) as (
+  values ('participants'), ('rundown'), ('expenses'), ('consumption'),
+         ('outing'), ('outing_categories')
 ),
 keberadaan as (
   select e.table_name,
-         e.kolom_wajib,
          c.relname is not null as tabel_ada,
          coalesce(c.relrowsecurity, false) as rls_aktif,
          (select count(*) from pg_policies p
@@ -28,9 +22,8 @@ keberadaan as (
          (select count(*) from pg_policies p
            where p.schemaname = 'public' and p.tablename = e.table_name and p.cmd <> 'SELECT') as policy_tulis
   from expected e
-  left join pg_class c on c.relname = e.table_name
-  left join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-  where c.relname is null or n.nspname = 'public'
+  left join pg_namespace n on n.nspname = 'public'
+  left join pg_class c on c.relnamespace = n.oid and c.relname = e.table_name and c.relkind in ('r', 'p')
 )
 select 'Tabel ' || table_name as pemeriksaan,
        case
@@ -55,14 +48,14 @@ order by pemeriksaan;
 with expected(table_name, kolom) as (
   values
     ('participants', 'id'), ('participants', 'name'), ('participants', 'phone'),
-    ('participants', 'status'), ('participants', 'payment'),
+    ('participants', 'status'), ('participants', 'payment'), ('participants', 'created_at'),
     ('rundown', 'id'), ('rundown', 'schedule_time'), ('rundown', 'activity'),
-    ('rundown', 'location'), ('rundown', 'pic'), ('rundown', 'notes'),
+    ('rundown', 'location'), ('rundown', 'pic'), ('rundown', 'notes'), ('rundown', 'created_at'),
     ('expenses', 'id'), ('expenses', 'date'), ('expenses', 'item'),
-    ('expenses', 'category'), ('expenses', 'amount'), ('expenses', 'photo_url'),
+    ('expenses', 'category'), ('expenses', 'amount'), ('expenses', 'photo_url'), ('expenses', 'created_at'),
     ('consumption', 'id'), ('consumption', 'date'), ('consumption', 'item'),
-    ('consumption', 'category'), ('consumption', 'amount'), ('consumption', 'photo_url'),
-    ('outing', 'id'), ('outing', 'destination'), ('outing', 'outing_date'), ('outing', 'description'),
+    ('consumption', 'category'), ('consumption', 'amount'), ('consumption', 'photo_url'), ('consumption', 'created_at'),
+    ('outing', 'id'), ('outing', 'destination'), ('outing', 'outing_date'), ('outing', 'description'), ('outing', 'created_at'),
     ('outing_categories', 'name')
 )
 select e.table_name || '.' || e.kolom as kolom_hilang,

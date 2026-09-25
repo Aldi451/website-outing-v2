@@ -7,13 +7,24 @@
  * - normalises dates/amounts before upsert (NOT NULL and invalid date are the
  *   most common causes of "data only saved locally")
  * - maps RLS / missing table / legacy column errors to an actionable hint
+ * - keeps diagnosis read-only: only the explicit Upload button writes a snapshot
+ * - preserves unsynced local data instead of overwriting it on remote load
  * - exposes diagnose() for the "Cek Supabase" button in the UI
  */
 (() => {
   const config = window.OUTING_CONFIG || {};
   const storageKey = 'outing-hub-v1';
+  const syncStateKey = `${storageKey}-sync-state`;
   const categoriesTable = 'outing_categories';
   const TABLES = ['participants', 'rundown', 'expenses', 'consumption', categoriesTable, 'outing'];
+  const READ_COLUMNS = {
+    participants: 'id,name,phone,status,payment,created_at',
+    rundown: 'id,schedule_time,activity,location,pic,notes',
+    expenses: 'id,date,item,category,amount,photo_url',
+    consumption: 'id,date,item,category,amount,photo_url',
+    [categoriesTable]: 'name',
+    outing: 'id,destination,outing_date,description,created_at'
+  };
   const LIBRARY_WAIT_MS = 15000;
 
   const statusEl = () => document.querySelector('#connection-status');
@@ -28,6 +39,19 @@
   const readLocal = () => {
     try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
   };
+  let remoteReadReady = false;
+
+  // Old browsers with existing localStorage but no marker are treated as
+  // unsynced. Never silently replace that data on first load after an upgrade.
+  const hasLocalChanges = () => localStorage.getItem(storageKey) !== null && localStorage.getItem(syncStateKey) !== 'synced';
+  const canAutoSync = () => remoteReadReady && !window.OUTING_LOCAL_LOGIN && localStorage.getItem(storageKey) !== null && localStorage.getItem(syncStateKey) === 'synced';
+  const markLocalChanges = () => {
+    remoteReadReady = false;
+    localStorage.setItem(syncStateKey, 'pending');
+    window.OUTING_SYNC_STATUS_TEXT = 'Data tersimpan di browser; belum terkonfirmasi di Supabase. Gunakan Upload setelah memeriksa isinya.';
+    setStatus('⚠ Data lokal belum terunggah', 'error');
+  };
+  const markSynced = () => localStorage.setItem(syncStateKey, 'synced');
 
   if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
     setStatus('Local mode');
@@ -38,6 +62,7 @@
   let client = null;
   let activeSync = null;
   let pendingSnapshot = null;
+  let loadRequest = 0;
 
   // ---------------------------------------------------------------- utilities
   const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
@@ -125,9 +150,10 @@
 
   // ------------------------------------------------------------ error helpers
   const RULES = [
-    { match: (error) => error.code === '42P01' || /relation .* does not exist|could not find the table|schema cache/i.test(error.message), hint: 'Tabel belum ada di Supabase -> jalankan supabase-schema.sql di SQL Editor Supabase.', label: 'tabel belum dibuat' },
-    { match: (error) => error.code === '42703' || /column .+ does not exist/i.test(error.message), hint: 'Struktur tabel masih versi lama -> jalankan blok migrasi di supabase-schema.sql.', label: 'kolom schema lama' },
-    { match: (error) => error.code === '42501' || /row-level security/i.test(error.message), hint: 'Ditolak RLS. Login harus memakai email & password user Supabase yang app_metadata-nya {"role":"admin"}, atau aktifkan opsi akses di supabase-schema.sql.', label: 'ditolak RLS/policy' },
+    // PGRST204 also says "schema cache", but means a missing COLUMN (not table).
+    { match: (error) => error.code === '42703' || error.code === 'PGRST204' || /could not find the .+ column|column .+ does not exist/i.test(error.message), hint: 'Kolom tabel belum lengkap -> jalankan seluruh supabase-schema.sql (blok migrasi) di SQL Editor.', label: 'kolom belum dibuat' },
+    { match: (error) => error.code === '42P01' || error.code === 'PGRST205' || /relation .* does not exist|could not find the table/i.test(error.message), hint: 'Tabel belum ada di Supabase -> jalankan supabase-schema.sql di SQL Editor Supabase.', label: 'tabel belum dibuat' },
+    { match: (error) => error.code === '42501' || /row-level security|permission denied/i.test(error.message), hint: 'Ditolak RLS. Login dengan email & password admin Supabase (app_metadata.role = "admin"); jangan izinkan anon menulis data peserta.', label: 'ditolak RLS/policy' },
     { match: (error) => error.code === '23502' || /null value in column/i.test(error.message), hint: 'Ada kolom wajib yang kosong (biasanya tanggal) -> isi tanggal di data tersebut.', label: 'kolom wajib kosong' },
     { match: (error) => error.code === '23514' || /check constraint/i.test(error.message), hint: 'Nilai status/pembayaran tidak sesuai daftar yang diizinkan (Ikut / Batal ikut / Tidak ikut).', label: 'nilai tidak valid' },
     { match: (error) => error.code === '23505' || /duplicate key/i.test(error.message), hint: 'Ada ID data yang bentrok -> hapus duplikatnya lalu upload lagi.', label: 'ID ganda' },
@@ -262,9 +288,19 @@
     }
   }
 
-  async function syncSnapshot(snapshot) {
+  async function syncSnapshot(snapshot, localAtStart) {
     const remote = toRemote(snapshot);
     setStatus('☁ Menyimpan...', 'syncing');
+    // If signing out failed, never reuse a previous admin's persisted JWT for a
+    // local admin/member login. Anon writes, if deliberately enabled, still work.
+    if (window.OUTING_LOCAL_LOGIN && (await sessionInfo()).active) {
+      const error = new Error('Session Supabase lama masih aktif. Keluar lalu muat ulang sebelum mencoba upload dengan akun lain.');
+      const failedTables = [...TABLES];
+      window.OUTING_SYNC_ERROR = error;
+      window.OUTING_SYNC_STATUS_TEXT = error.message;
+      setStatus('⚠ Session lama masih aktif', 'error');
+      return { ok: false, error, failedTables, hint: error.message, localOnlyLogin: true };
+    }
 
     const results = await Promise.all([
       syncTable('participants', remote.participants),
@@ -277,15 +313,25 @@
 
     const failed = results.filter((result) => !result.ok);
     if (!failed.length) {
-      // Keep generated UUIDs locally so later edits update the same remote rows.
-      localStorage.setItem(storageKey, JSON.stringify(remote.local));
-      window.OUTING_SYNC_STATUS_TEXT = '';
-      setStatus('☁ Supabase', 'connected');
-      return { ok: true, results, failedTables: [] };
+      // Keep generated UUIDs locally and in the in-memory UI, but only if no
+      // newer edit landed while the network request was running.
+      if (localStorage.getItem(storageKey) === localAtStart) {
+        localStorage.setItem(storageKey, JSON.stringify(remote.local));
+        markSynced();
+        remoteReadReady = true;
+        notifyRemoteReady();
+      }
+      const pendingUpload = hasLocalChanges();
+      window.OUTING_SYNC_STATUS_TEXT = pendingUpload ? 'Ada perubahan lokal baru yang belum masuk ke Supabase. Klik Upload untuk mengirimnya.' : '';
+      setStatus(pendingUpload ? '⚠ Ada data lokal belum terunggah' : '☁ Supabase', pendingUpload ? 'error' : 'connected');
+      return { ok: true, results, failedTables: [], pendingUpload };
     }
 
+    markLocalChanges();
     const session = await sessionInfo();
-    const localOnlyLogin = failed.some((result) => result.code === '42501') && !session.active;
+    const rlsFailures = failed.filter((result) => result.code === '42501').map((result) => result.table);
+    const schemaFailures = failed.filter((result) => ['42703', 'PGRST204', '42P01', 'PGRST205'].includes(result.code)).map((result) => result.table);
+    const localOnlyLogin = rlsFailures.length > 0 && !session.active;
     window.OUTING_SYNC_STATUS_TEXT = failed.map((result) => `${result.table}: ${result.message}`).join('\n');
     setStatus(localOnlyLogin ? '⚠ Login lokal (tanpa session)' : '⚠ Gagal sinkronisasi', 'error');
 
@@ -298,6 +344,8 @@
       error,
       results,
       failedTables: failed.map((result) => result.table),
+      rlsFailures,
+      schemaFailures,
       hint: failed[0].hint,
       code: failed[0].code,
       session,
@@ -308,15 +356,18 @@
   async function flushQueue() {
     let result = { ok: true, results: [], failedTables: [] };
     while (pendingSnapshot) {
-      const snapshot = pendingSnapshot;
+      const { data, localAtStart } = pendingSnapshot;
       pendingSnapshot = null;
-      result = await syncSnapshot(snapshot);
+      result = await syncSnapshot(data, localAtStart);
     }
     return result;
   }
 
   function queueSync(snapshot) {
-    pendingSnapshot = JSON.parse(JSON.stringify(snapshot));
+    pendingSnapshot = {
+      data: JSON.parse(JSON.stringify(snapshot)),
+      localAtStart: localStorage.getItem(storageKey)
+    };
     if (!activeSync) {
       activeSync = flushQueue().finally(() => {
         activeSync = null;
@@ -362,9 +413,14 @@
     document.dispatchEvent(new CustomEvent('outing:remote-ready'));
   }
 
-  async function loadRemote() {
+  async function loadRemote({ replaceLocal = false } = {}) {
+    const request = ++loadRequest;
+    remoteReadReady = false;
     setStatus('☁ Memuat...', 'syncing');
     try {
+      if (activeSync) await activeSync;
+      const localAtStart = localStorage.getItem(storageKey);
+      const stateAtStart = localStorage.getItem(syncStateKey);
       const [participants, outing, rundown, expenses, consumption, categories] = await Promise.all([
         readTable('participants', 'created_at'),
         client.from('outing').select('*').order('created_at').limit(1).then(({ data, error }) => {
@@ -376,16 +432,25 @@
         readTable('consumption', 'date'),
         readTable(categoriesTable, 'name')
       ]);
+      if (request !== loadRequest) return { superseded: true };
 
-      const hasRemote = participants.length || outing.length || rundown.length || expenses.length || consumption.length || categories.length;
-      if (!hasRemote) {
-        const result = await queueSync(readLocal());
-        if (!result.ok) throw result.error;
-        notifyRemoteReady();
-        return;
+      // Edits (or a pending upload) made during the GETs must never be lost.
+      if (localStorage.getItem(storageKey) !== localAtStart || localStorage.getItem(syncStateKey) !== stateAtStart) {
+        window.OUTING_SYNC_STATUS_TEXT = 'Data lokal berubah saat Supabase sedang dimuat. Gunakan tombol Muat dari Supabase jika ingin menggantinya.';
+        setStatus('⚠ Data lokal dipertahankan', 'error');
+        return { ok: true, preservedLocal: true };
       }
 
-      const current = readLocal();
+      const hasRemote = participants.length || outing.length || rundown.length || expenses.length || consumption.length || categories.length;
+      if (!replaceLocal && (!hasRemote || hasLocalChanges())) {
+        const pending = hasLocalChanges();
+        window.OUTING_SYNC_STATUS_TEXT = !hasRemote
+          ? 'Supabase kosong. Data lokal dipertahankan; login admin Supabase lalu klik Upload untuk mengirimnya.'
+          : 'Ada data lokal yang belum terkonfirmasi tersinkron (termasuk dari versi lama). Gunakan Upload atau Muat dari Supabase secara sadar.';
+        setStatus(pending ? '⚠ Data lokal belum terunggah' : '☁ Supabase kosong (data lokal)', pending ? 'error' : 'connected');
+        return { ok: true, empty: !hasRemote, preservedLocal: localAtStart !== null };
+      }
+
       const remote = {
         participants: participants.map(mapParticipant),
         outing: outing[0]
@@ -395,19 +460,22 @@
               date: outing[0].outing_date || '',
               description: outing[0].description || ''
             }
-          : current.outing,
+          : { id: '', destination: '', date: '', description: '' },
         rundown: rundown.map(mapRundown),
         expenses: expenses.map(mapLedger),
         consumption: consumption.map(mapLedger),
-        categories: categories.length
-          ? categories.map((item) => item.name).filter(Boolean)
-          : (current.categories || [])
+        categories: categories.map((item) => item.name).filter(Boolean)
       };
       localStorage.setItem(storageKey, JSON.stringify(remote));
+      markSynced();
+      remoteReadReady = true;
       window.OUTING_SYNC_STATUS_TEXT = '';
-      setStatus('☁ Supabase', 'connected');
+      window.OUTING_SYNC_ERROR = null;
+      setStatus('☁ Baca Supabase', 'connected');
       notifyRemoteReady();
+      return { ok: true, loaded: true, empty: !hasRemote };
     } catch (error) {
+      if (request !== loadRequest) return { superseded: true };
       const described = describeError(error, 'baca data');
       console.error('Supabase load failed:', error);
       const session = await sessionInfo();
@@ -415,6 +483,7 @@
       window.OUTING_SYNC_STATUS_TEXT = `${described.table}: ${described.message}`;
       setStatus(needsLogin ? '⚠ Login Supabase diperlukan' : '⚠ Gagal memuat data', 'error');
       window.OUTING_SYNC_ERROR = error;
+      return { ok: false, error: described };
     }
   }
 
@@ -431,61 +500,66 @@
       outing: local.outing ? 1 : 0
     };
 
+    // A diagnosis must never upsert or reconcile (delete!) remote rows. Select
+    // every column needed by the app so a missing participants.name is detected
+    // even when the table is empty. HEAD + count avoids downloading private data.
     const readResults = {};
     for (const table of TABLES) {
-      const conflictColumn = table === categoriesTable ? 'name' : 'id';
       try {
-        const { data, error } = await client.from(table).select(conflictColumn);
+        const { count, error } = await client.from(table).select(READ_COLUMNS[table], { head: true, count: 'exact' });
         if (error) throw error;
-        readResults[table] = { ok: true, rows: (data || []).length };
+        readResults[table] = { ok: true, rows: typeof count === 'number' ? count : null };
       } catch (error) {
         readResults[table] = { ok: false, ...describeError(error, table) };
       }
     }
 
-    let upload = null;
-    const hasLocalData = Object.values(localCounts).some((count) => count > 0);
-    if (hasLocalData) upload = await queueSync(local);
-
-    const writeByTable = {};
-    (upload?.results || []).forEach((result) => {
-      writeByTable[result.table] = result.ok
-        ? { ok: true, rows: result.rows }
-        : { ok: false, code: result.code, message: result.message, label: result.label, hint: result.hint };
-    });
-
+    const adminSession = session.active && session.role === 'admin';
     const tables = TABLES.map((table) => {
       const read = readResults[table];
-      const write = writeByTable[table];
       return {
         table,
         localRows: localCounts[table] ?? 0,
         read: read.ok ? 'ok' : 'gagal',
-        readDetail: read.ok ? `${read.rows} baris di Supabase` : `${read.label}: ${read.message}`,
+        readDetail: read.ok
+          ? (read.rows === null ? 'query berhasil (jumlah baris tidak tersedia)' : `${read.rows} baris terlihat di Supabase`)
+          : `${read.label}: ${read.message}`,
         remoteRows: read.ok ? read.rows : null,
-        write: write ? (write.ok ? 'ok' : 'gagal') : 'belum diuji',
-        writeDetail: write ? (write.ok ? `${write.rows} baris terkirim` : `${write.label}: ${write.message}`) : 'tidak ada data lokal untuk diuji',
-        hint: (write && !write.ok && write.hint) || (!read.ok && read.hint) || ''
+        write: 'belum diuji',
+        writeDetail: adminSession
+          ? 'Belum diuji; gunakan tombol Upload untuk mengirim data setelah memeriksa isinya.'
+          : 'Belum diuji; login email/password admin Supabase diperlukan untuk policy tulis default.',
+        hint: read.ok ? '' : read.hint
       };
     });
 
-    const problems = tables.filter((table) => table.read === 'gagal' || table.write === 'gagal');
+    const problems = tables.filter((table) => table.read === 'gagal');
     return {
       ok: problems.length === 0,
       url: config.SUPABASE_URL,
       session,
       tables,
       problems,
-      localOnlyLogin: problems.some((table) => /RLS|policy/i.test(table.writeDetail) || /RLS|policy/i.test(table.readDetail)) && !session.active,
+      localOnlyLogin: !session.active,
       hint: problems.find((table) => table.hint)?.hint || ''
     };
   }
 
   function start() {
-    const ready = loadRemote();
+    const ready = (async () => {
+      if (window.OUTING_LOCAL_LOGIN) {
+        try {
+          const { error } = await client.auth.signOut({ scope: 'local' });
+          if (error) console.warn('Gagal menghapus session Supabase lama:', error);
+        } catch (error) { console.warn('Gagal menghapus session Supabase lama:', error); }
+      }
+      return loadRemote();
+    })();
     window.OUTING_SYNC = {
       client,
       queue: queueSync,
+      canAutoSync,
+      markLocalChanges,
       load: loadRemote,
       diagnose,
       tables: TABLES

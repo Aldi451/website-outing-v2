@@ -158,7 +158,7 @@ nav { display: grid; gap: 3px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 30px; }
 .topbar-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar h2 { margin: 0; font-size: 29px; line-height: 1.15; letter-spacing: -0.7px; }
-.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.top-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
 .menu-toggle { display: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--ink); font-size: 20px; }
 .menu-backdrop { display: none; }
 
