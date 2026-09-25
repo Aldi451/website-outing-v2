@@ -8,7 +8,7 @@ Website ringan untuk pengelolaan outing yang dapat dijalankan langsung di Infini
 - Mode lihat: `member` / `member`
 - Admin **online**: email/password yang dibuat di Supabase Authentication dengan `app_metadata.role = "admin"`.
 
-Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama di Supabase hanya dapat dilakukan admin online; password lokal yang ada di JavaScript bukan pengaman database.
+Mode lihat (member) dapat membaca informasi outing, rundown, **daftar peserta lengkap di dashboard**, serta **rincian pembelian barang dan konsumsi beserta foto buktinya** — semuanya tanpa tombol tambah/edit/hapus. Perubahan bersama di Supabase hanya dapat dilakukan admin online; password lokal yang ada di JavaScript bukan pengaman database. Kalau rincian biaya/foto tidak boleh dilihat member, kembalikan `expenses` dan `consumption` ke `ADMIN_PAGES` di `app.js` dan beri kelas `admin-only` pada tombol navigasinya di `index.html`.
 
 ## Fitur
 
@@ -18,6 +18,8 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama d
 - Status pembayaran tetap tersedia untuk kebutuhan administrasi outing.
 - Rundown outing dengan waktu, agenda, lokasi, PIC, dan catatan.
 - Admin dapat menambah, mengedit, menghapus, serta import rundown melalui Excel. Peserta/member hanya dapat melihat rundown.
+- Dashboard menampilkan **seluruh** daftar peserta (bukan hanya beberapa baris pertama) dengan filter pencarian di halaman Data Peserta.
+- Halaman Pembelian Barang dan Konsumsi dapat dibuka semua login: kolom foto bukti berupa pratinjau yang bisa diklik untuk melihat foto ukuran penuh (dialog rincian berisi tanggal, item, kategori, jumlah, dan bukti foto, lengkap dengan tombol Sebelumnya/Berikutnya). Hanya admin yang melihat kolom Aksi dan tombol tambah data.
 - Data tujuan, tanggal, dan catatan outing.
 - Pembelian barang dan konsumsi dengan kategori bawaan atau custom.
 - Upload foto bukti dengan kompresi JPEG di browser.
@@ -26,6 +28,7 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama d
 - Tampilan responsif dengan menu mobile dan daftar data yang lebih mudah dibaca di layar kecil.
 - CSS fallback inline + guard anti-MIME di `index.html`, sehingga halaman tetap tampil rapi di hosting gratisan yang kadang mengirim file CSS sebagai `text/html`.
 - Sinkronisasi Supabase per tabel: nama tabel yang gagal dilaporkan, tanggal/angka dari Excel dinormalisasi sebelum upload, dan tombol **🩺 Cek Supabase** memeriksa skema secara *read-only* (tidak melakukan upload/hapus).
+- Setelah upload, muncul jendela **rincian per tabel** (terkirim / ditolak + sebabnya / dilewati karena kosong) dan tombol **ℹ Detail upload** + **📋 Salin detail**; dialog konfirmasi upload menyebut tabel yang akan dikirim beserta akun login yang dipakai.
 - Data demo tersedia lokal; perubahan disimpan di `localStorage` browser sampai berhasil diupload.
 
 ## Upload ke InfinityFree
@@ -76,7 +79,7 @@ Aplikasi membaca Supabase saat dibuka, tetapi **tidak otomatis mengirim data dem
     where email = 'admin@domainanda.com';
    ```
 
-5. Deploy ulang file website yang berubah, muat ulang halaman, lalu login menggunakan **email/password Supabase** tersebut (bukan `admin/power88`). Klik **🩺 Cek Supabase**: ini hanya membaca kolom, **bukan** menguji atau melakukan penulisan. Periksa data lokal di halaman, lalu klik **↻ Upload ke Supabase** dan setujui konfirmasi. Upload menyamakan keenam tabel dengan browser ini, **termasuk menghapus baris server yang tidak ada di browser**. Verifikasi jumlah baris melalui Table Editor atau buka dari browser lain.
+5. Deploy ulang file website yang berubah, muat ulang halaman (`Ctrl+Shift+R`), lalu login menggunakan **email/password Supabase** tersebut (bukan `admin/power88`). Klik **🩺 Cek Supabase**: ini hanya membaca kolom, **bukan** menguji atau melakukan penulisan. Periksa data lokal di halaman, lalu klik **↻ Upload ke Supabase** dan setujui konfirmasi. Upload menyamakan keenam tabel dengan browser ini, **termasuk menghapus baris server yang tidak ada di browser**. Sesudahnya muncul rincian per tabel (terkirim / ditolak + sebabnya / dilewati karena kosong); kalau ada yang ditolak, klik **📋 Salin detail** untuk melihat penyebab lengkapnya. Verifikasi jumlah baris melalui Table Editor atau buka dari browser lain.
 6. Jika browser sudah punya data lokal tetapi Anda justru ingin menampilkan data server, gunakan **↓ Muat dari Supabase** dengan sadar: tindakan ini mengganti data lokal yang belum terupload.
 
 Policy tulis default hanya menerima user Supabase dengan claim `app_metadata.role = "admin"`; login lokal tidak memiliki session itu. Jangan menaruh `service_role key` atau password admin di frontend. Opsi anon menulis di schema **tidak aman** karena siapa pun dengan anon key publik dapat mengubah dan menghapus semua data; jangan gunakan untuk data peserta.

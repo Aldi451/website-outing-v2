@@ -35,6 +35,28 @@ Setelah schema diperbaiki dan login email admin Supabase, cek isi browser, lalu 
 menyamakan tabel server dengan browser ini dan dapat menghapus baris server yang tidak ada
 di browser; dialog meminta konfirmasi. Jangan hapus data browser yang belum terupload.
 
+## Kalau hanya "beberapa tabel" yang gagal
+
+Jumlah tabel yang gagal **tidak selalu enam**, dan itu bukan tanda setengah berhasil.
+Aplikasi mengirim tabel satu per satu, dan tabel yang **kosong di browser ini dilewati** —
+tidak ada yang dikirim dan tidak ada yang dihapus, jadi tabel itu tidak pernah "gagal".
+Karena itu pesan seperti "2 tabel ditolak RLS" berarti: **hanya 2 tabel yang berisi data di
+browser ini**, dan server menolak keduanya. Penyebabnya tetap sama (biasanya login tanpa
+session admin Supabase), bukan masalah pada 2 tabel tertentu.
+
+Sejak versi terbaru, hasil upload langsung menampilkan **jendela rincian per tabel**:
+
+| Kolom | Arti |
+| --- | --- |
+| **terkirim** | jumlah baris di tabel itu berhasil dikirim (dan baris server yang tidak ada di browser ikut dihapus) |
+| **ditolak** | server menolaknya; baris kedua menjelaskan kode + penyebab (mis. `ditolak RLS/policy`) dan langkah perbaikannya |
+| **dilewati** | tabel kosong di browser ini, jadi tidak dikirim |
+
+Tombol **ℹ Detail upload** di header membuka kembali rincian terakhir; tombol **📋 Salin
+detail** menyalin teksnya (aman dibagikan: berisi nama tabel + pesan error, bukan isi data
+peserta). Dialog konfirmasi upload juga menampilkan daftar tabel yang akan dikirim beserta
+akun login yang sedang dipakai, sehingga jelas sebelum menekan Upload.
+
 ## Penyebab, berurutan dari yang paling sering
 
 ### 1. Login masih mode lokal, jadi tidak ada session Supabase

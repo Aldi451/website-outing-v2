@@ -153,7 +153,7 @@
     // PGRST204 also says "schema cache", but means a missing COLUMN (not table).
     { match: (error) => error.code === '42703' || error.code === 'PGRST204' || /could not find the .+ column|column .+ does not exist/i.test(error.message), hint: 'Kolom tabel belum lengkap -> jalankan seluruh supabase-schema.sql (blok migrasi) di SQL Editor.', label: 'kolom belum dibuat' },
     { match: (error) => error.code === '42P01' || error.code === 'PGRST205' || /relation .* does not exist|could not find the table/i.test(error.message), hint: 'Tabel belum ada di Supabase -> jalankan supabase-schema.sql di SQL Editor Supabase.', label: 'tabel belum dibuat' },
-    { match: (error) => error.code === '42501' || /row-level security|permission denied/i.test(error.message), hint: 'Ditolak RLS. Login dengan email & password admin Supabase (app_metadata.role = "admin"); jangan izinkan anon menulis data peserta.', label: 'ditolak RLS/policy' },
+    { match: (error) => error.code === '42501' || /row-level security|permission denied/i.test(error.message), hint: 'Login memakai email & password admin Supabase dengan app_metadata.role = "admin"; jangan izinkan anon menulis data peserta.', label: 'ditolak RLS/policy' },
     { match: (error) => error.code === '23502' || /null value in column/i.test(error.message), hint: 'Ada kolom wajib yang kosong (biasanya tanggal) -> isi tanggal di data tersebut.', label: 'kolom wajib kosong' },
     { match: (error) => error.code === '23514' || /check constraint/i.test(error.message), hint: 'Nilai status/pembayaran tidak sesuai daftar yang diizinkan (Ikut / Batal ikut / Tidak ikut).', label: 'nilai tidak valid' },
     { match: (error) => error.code === '23505' || /duplicate key/i.test(error.message), hint: 'Ada ID data yang bentrok -> hapus duplikatnya lalu upload lagi.', label: 'ID ganda' },
@@ -261,8 +261,9 @@
   }
 
   async function syncTable(tableName, rows, conflictColumn = 'id') {
+    const sent = rows.length;
     try {
-      if (rows.length) {
+      if (sent) {
         const { error } = await client.from(tableName).upsert(rows, { onConflict: conflictColumn });
         if (error) throw error;
       }
@@ -280,26 +281,118 @@
         if (error) throw error;
       }
 
-      return { table: tableName, ok: true, rows: rows.length };
+      // A table with nothing to send and nothing to delete never reaches the
+      // server, so it can neither succeed nor fail. Report it as skipped instead
+      // of counting it as a successful upload (this is why a local login may see
+      // only a few tables "fail" - the rest were simply empty in the browser).
+      const skipped = sent === 0 && stale.length === 0;
+      return {
+        table: tableName,
+        ok: true,
+        rows: sent,
+        sent,
+        deleted: stale.length,
+        skipped,
+        code: '',
+        label: skipped ? 'dilewati' : 'terkirim',
+        message: skipped ? 'Kosong di browser ini, tidak ada yang dikirim.' : `${sent} baris dikirim.`,
+        hint: ''
+      };
     } catch (error) {
       const described = describeError(error, tableName);
       console.error(`Supabase sync failed for table "${tableName}":`, error);
-      return { table: tableName, ok: false, rows: rows.length, error, ...described };
+      return { table: tableName, ok: false, rows: sent, sent, deleted: 0, skipped: false, error, ...described };
     }
+  }
+
+  /**
+   * Plain-language summary of one table after an upload attempt. The UI uses it
+   * to answer "which tables failed?" without opening the browser console.
+   */
+  function describeTableResult(result) {
+    if (result.ok && result.skipped) {
+      return { status: 'dilewati', detail: 'Kosong di browser ini, jadi tidak dikirim.' };
+    }
+    if (result.ok) {
+      const deleted = result.deleted ? `, ${result.deleted} baris lama dihapus di Supabase` : '';
+      return { status: 'terkirim', detail: `${result.sent} baris dikirim${deleted}.` };
+    }
+    return {
+      status: 'ditolak',
+      detail: `${result.label}: ${result.message}`,
+      hint: result.hint || ''
+    };
+  }
+
+  function buildUploadReport({ results, session, startedAt, blockedReason = '', blockedMessage = '' }) {
+    const tables = results.map((result) => {
+      const described = describeTableResult(result);
+      return {
+        table: result.table,
+        ok: Boolean(result.ok),
+        status: described.status,
+        detail: described.detail,
+        hint: described.hint || '',
+        sent: result.sent ?? result.rows ?? 0,
+        deleted: result.deleted || 0,
+        skipped: Boolean(result.skipped),
+        code: result.code || ''
+      };
+    });
+    return {
+      at: new Date().toISOString(),
+      startedAt,
+      ok: tables.every((table) => table.ok),
+      blockedReason,
+      blockedMessage,
+      session,
+      tables,
+      failedTables: tables.filter((table) => !table.ok).map((table) => table.table),
+      skippedTables: tables.filter((table) => table.skipped).map((table) => table.table),
+      sentTables: tables.filter((table) => table.ok && !table.skipped).map((table) => table.table),
+      counts: {
+        failed: tables.filter((table) => !table.ok).length,
+        skipped: tables.filter((table) => table.skipped).length,
+        sent: tables.filter((table) => table.ok && !table.skipped).length
+      }
+    };
+  }
+
+  function recordUpload(report) {
+    window.OUTING_SYNC_LAST_UPLOAD = report;
+    return report;
+  }
+
+  /** Report used when the upload never reached the network at all. */
+  function blockedReport(session, blockedReason, blockedMessage) {
+    return recordUpload(buildUploadReport({
+      results: TABLES.map((table) => ({
+        table, ok: false, sent: 0, skipped: false, code: '', label: 'dibatalkan', message: blockedMessage
+      })),
+      session,
+      startedAt: new Date().toISOString(),
+      blockedReason,
+      blockedMessage
+    }));
   }
 
   async function syncSnapshot(snapshot, localAtStart) {
     const remote = toRemote(snapshot);
+    const startedAt = new Date().toISOString();
+    // Session state decides whether the default write policies can accept this
+    // upload at all, so read it once and attach it to the report.
+    const session = await sessionInfo();
     setStatus('☁ Menyimpan...', 'syncing');
     // If signing out failed, never reuse a previous admin's persisted JWT for a
     // local admin/member login. Anon writes, if deliberately enabled, still work.
-    if (window.OUTING_LOCAL_LOGIN && (await sessionInfo()).active) {
+    if (window.OUTING_LOCAL_LOGIN && session.active) {
       const error = new Error('Session Supabase lama masih aktif. Keluar lalu muat ulang sebelum mencoba upload dengan akun lain.');
       const failedTables = [...TABLES];
       window.OUTING_SYNC_ERROR = error;
       window.OUTING_SYNC_STATUS_TEXT = error.message;
       setStatus('⚠ Session lama masih aktif', 'error');
-      return { ok: false, error, failedTables, hint: error.message, localOnlyLogin: true };
+      const report = blockedReport(session, 'stale-session', error.message);
+      return { ok: false, error, failedTables, hint: error.message, localOnlyLogin: true, session, report };
     }
 
     const results = await Promise.all([
@@ -310,6 +403,7 @@
       syncTable(categoriesTable, remote.categories, 'name'),
       syncTable('outing', [remote.outing])
     ]);
+    const report = recordUpload(buildUploadReport({ results, session, startedAt }));
 
     const failed = results.filter((result) => !result.ok);
     if (!failed.length) {
@@ -324,14 +418,17 @@
       const pendingUpload = hasLocalChanges();
       window.OUTING_SYNC_STATUS_TEXT = pendingUpload ? 'Ada perubahan lokal baru yang belum masuk ke Supabase. Klik Upload untuk mengirimnya.' : '';
       setStatus(pendingUpload ? '⚠ Ada data lokal belum terunggah' : '☁ Supabase', pendingUpload ? 'error' : 'connected');
-      return { ok: true, results, failedTables: [], pendingUpload };
+      return { ok: true, results, report, failedTables: [], skippedTables: report.skippedTables, pendingUpload };
     }
 
     markLocalChanges();
-    const session = await sessionInfo();
     const rlsFailures = failed.filter((result) => result.code === '42501').map((result) => result.table);
     const schemaFailures = failed.filter((result) => ['42703', 'PGRST204', '42P01', 'PGRST205'].includes(result.code)).map((result) => result.table);
-    const localOnlyLogin = rlsFailures.length > 0 && !session.active;
+    // No Supabase session + RLS denial on every table that was actually sent is
+    // the "local login" signature. Empty tables are skipped by the server, so
+    // the count here is the number of tables that had data in this browser.
+    const sentTables = results.filter((result) => !result.skipped).map((result) => result.table);
+    const localOnlyLogin = rlsFailures.length > 0 && !session.active && rlsFailures.length === sentTables.length;
     window.OUTING_SYNC_STATUS_TEXT = failed.map((result) => `${result.table}: ${result.message}`).join('\n');
     setStatus(localOnlyLogin ? '⚠ Login lokal (tanpa session)' : '⚠ Gagal sinkronisasi', 'error');
 
@@ -343,7 +440,9 @@
       ok: false,
       error,
       results,
+      report,
       failedTables: failed.map((result) => result.table),
+      skippedTables: report.skippedTables,
       rlsFailures,
       schemaFailures,
       hint: failed[0].hint,
@@ -562,7 +661,8 @@
       markLocalChanges,
       load: loadRemote,
       diagnose,
-      tables: TABLES
+      tables: TABLES,
+      lastUpload: () => window.OUTING_SYNC_LAST_UPLOAD || null
     };
     window.OUTING_SYNC_READY = ready;
     window.OUTING_SYNC_STATUS = { configured: true, libraryLoaded: true, ready: true };

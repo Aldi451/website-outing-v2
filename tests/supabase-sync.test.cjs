@@ -148,6 +148,44 @@ test('empty remote never auto-uploads demo or unsynced local data', async () => 
   assert.match(JSON.parse(store.get('outing-hub-v1')).participants[0].id, /^[0-9a-f]{8}-[0-9a-f]{4}-4/);
 });
 
+test('upload report names the failing tables and the ones skipped as empty', async () => {
+  const { window, state } = setup({ local: localData });
+  await window.OUTING_SYNC_READY;
+
+  // No Supabase session: only the tables that actually hold local rows are sent,
+  // so those are the only tables the server can reject.
+  const blocked = await window.OUTING_SYNC.queue(localData);
+  assert.equal(blocked.ok, false);
+  assert.deepEqual([...blocked.failedTables].sort(), ['outing', 'participants']);
+  assert.deepEqual([...blocked.skippedTables].sort(), ['consumption', 'expenses', 'outing_categories', 'rundown']);
+  assert.equal(blocked.report.counts.failed, 2);
+  assert.equal(blocked.report.counts.skipped, 4);
+  assert.equal(blocked.report.tables.find((table) => table.table === 'rundown').status, 'dilewati');
+  assert.match(blocked.report.tables.find((table) => table.table === 'participants').detail, /ditolak RLS\/policy/);
+  assert.equal(window.OUTING_SYNC.lastUpload(), blocked.report);
+
+  // With an admin session the same snapshot is accepted and the report says so.
+  state.session = adminSession;
+  const uploaded = await window.OUTING_SYNC.queue(localData);
+  assert.equal(uploaded.ok, true);
+  assert.equal(uploaded.report.ok, true);
+  assert.equal(uploaded.report.counts.sent, 2);
+  assert.deepEqual([...uploaded.report.sentTables].sort(), ['outing', 'participants']);
+  assert.equal(uploaded.report.tables.find((table) => table.table === 'participants').status, 'terkirim');
+});
+
+test('a blocked upload (stale session) still produces a readable report', async () => {
+  const { window, calls } = setup({ local: localData, session: adminSession });
+  await window.OUTING_SYNC_READY;
+  window.OUTING_LOCAL_LOGIN = true;
+  const result = await window.OUTING_SYNC.queue(localData);
+  assert.equal(result.ok, false);
+  assert.equal(result.report.blockedReason, 'stale-session');
+  assert.match(result.report.blockedMessage, /Session Supabase lama masih aktif/);
+  assert.equal(result.report.counts.failed, 6);
+  assert.equal(calls.filter(({ operation }) => operation === 'upsert' || operation === 'delete').length, 0);
+});
+
 test('partial remote never overwrites older local data; explicit load replaces it', async () => {
   const { window, store, calls } = setup({
     local: { ...localData, categories: ['Custom'] },

@@ -3,7 +3,7 @@ const DEFAULT_ADMIN = { userId: 'admin', password: 'power88' };
 const DEFAULT_MEMBER = { userId: 'member', password: 'member' };
 const PARTICIPANT_STATUSES = ['Ikut', 'Batal ikut', 'Tidak ikut'];
 const PAYMENT_STATUSES = ['Belum bayar', 'Bayar sebagian', 'Sudah bayar'];
-const ADMIN_PAGES = ['participants', 'expenses', 'consumption', 'reports'];
+const ADMIN_PAGES = ['participants', 'reports'];
 const ADDABLE_PAGES = ['participants', 'rundown', 'expenses', 'consumption'];
 
 const DEFAULT_DB = {
@@ -142,31 +142,48 @@ function saveDb() {
  */
 function syncFailureMessage(result) {
   const hint = result?.hint ? ` ${result.hint}` : '';
-  const tables = result?.failedTables || [];
+  const failedTables = result?.failedTables || [];
+  const skippedTables = result?.skippedTables || [];
+  const failedText = failedTables.join(', ');
+  // Say which tables were skipped (empty in this browser) so "2 tabel" never
+  // looks like the whole story again.
+  const skippedText = skippedTables.length
+    ? ` Tabel ${skippedTables.join(', ')} kosong di browser ini, jadi tidak perlu dikirim.`
+    : '';
   if (result?.localOnlyLogin) {
     if (!result.results) return `Data hanya tersimpan lokal. ${result.hint || 'Session Supabase lama perlu ditutup.'}`;
-    const schema = result.schemaFailures?.length || 0;
-    const rls = result.rlsFailures?.length || 0;
-    return `Data hanya tersimpan lokal: ${schema ? `${schema} tabel perlu perbaikan skema; ` : ''}${rls} tabel ditolak RLS tanpa session admin Supabase. Jalankan supabase-schema.sql, lalu login email/password admin Supabase.`;
+    const schema = result.schemaFailures?.length
+      ? `${result.schemaFailures.length} tabel perlu perbaikan skema (${result.schemaFailures.join(', ')}). `
+      : '';
+    return `Upload ditolak RLS pada ${failedTables.length} tabel: ${failedText}. ${schema}Login memakai email/password admin Supabase.${skippedText}`;
   }
-  if (tables.length) {
-    return `Gagal kirim ke Supabase pada tabel: ${tables.join(', ')}.${hint}`;
+  if (failedTables.length) {
+    return `Upload gagal pada ${failedTables.length} tabel: ${failedText}.${hint}${skippedText}`;
   }
   return `Data tersimpan lokal, tetapi belum masuk ke Supabase.${hint || ' Cek koneksi atau policy RLS.'}`;
 }
 
-function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.') {
+function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.', { openReport = false } = {}) {
   if (result?.pendingUpload) {
     showToast('Data tersimpan lokal. Periksa isinya, lalu login admin Supabase dan klik Upload ke Supabase.');
   } else if (result?.ok && !result.localOnly) {
-    showToast(successMessage);
+    if (result.skippedTables?.length) {
+      showToast(`${successMessage} Tabel ${result.skippedTables.join(', ')} kosong, jadi dilewati.`);
+    } else {
+      showToast(successMessage);
+    }
   } else if (result?.ok) {
     showToast('Data tersimpan di browser; Supabase belum siap atau belum dikonfigurasi.');
   } else {
     if (result?.error) console.error('Sinkronisasi Supabase gagal:', result.error);
     if (result?.results) console.table(result.results.map(({ table, ok, label, message }) => ({ table, ok, label, message })));
     showToast(syncFailureMessage(result));
+    // A short toast cannot show which tables failed and why; on an explicit
+    // Upload the full per-table report is opened so the reason is visible
+    // without the browser console (background failures keep the toast + button).
+    if (openReport && result?.report) openUploadReport(result.report);
   }
+  refreshSyncDetailButton();
 }
 
 function showToast(message) {
@@ -229,6 +246,10 @@ function getLoggedUserName() {
 function sortedRundown() {
   return [...(db.rundown || [])].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
 }
+
+// Mount point of the currently open report/detail dialog, so delegated handlers
+// can read what is being shown without stuffing base64 into HTML attributes.
+const $reportData = { __item: null };
 
 async function login(event) {
   event.preventDefault();
@@ -293,6 +314,11 @@ function startApp() {
   $('#avatar').textContent = isAdmin() ? 'A' : 'P';
   closeMobileMenu();
   render();
+  refreshSyncDetailButton();
+  // Warn before the first upload attempt instead of after a confusing failure.
+  if (isAdmin() && session.local) {
+    showToast('Login lokal: data hanya tersimpan di browser ini. Untuk upload ke Supabase, login dengan email/password admin Supabase.');
+  }
 }
 
 function render() {
@@ -342,6 +368,7 @@ function renderDashboard() {
   const paid = participants.filter((participant) => participant.payment === 'Sudah bayar').length;
   const scheduleCount = (db.rundown || []).length;
   const upcoming = sortedRundown().slice(0, 4);
+  const ledgerTotal = ledgerTotalAmount();
 
   return `
     <div class="page-grid">
@@ -406,10 +433,45 @@ function renderDashboard() {
         </div>
       </div>
       <div class="table-wrap">
-        ${renderParticipantTable(participants.slice(0, 6), isAdmin())}
+        ${renderParticipantTable(participants, isAdmin())}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">BIAYA</p>
+          <h3>Pembelian &amp; konsumsi</h3>
+        </div>
+        <span class="status-pill">Total ${formatMoney(ledgerTotal)}</span>
+      </div>
+      <div class="page-grid">
+        <div class="card stat-card">
+          <span class="stat-icon">▣</span>
+          <span class="stat-label">Pembelian barang</span>
+          <div class="stat-value">${(db.expenses || []).length}</div>
+          <small class="muted">Total ${formatMoney(ledgerTotalAmount('expenses'))}</small>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-icon">◉</span>
+          <span class="stat-label">Konsumsi</span>
+          <div class="stat-value">${(db.consumption || []).length}</div>
+          <small class="muted">Total ${formatMoney(ledgerTotalAmount('consumption'))}</small>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="link-btn" data-action="go-expenses">Rincian pembelian barang <span aria-hidden="true">→</span></button>
+        <button class="link-btn" data-action="go-consumption">Rincian konsumsi <span aria-hidden="true">→</span></button>
       </div>
     </div>
   `;
+}
+
+/** Total of one ledger (expenses/consumption) or of both together. */
+function ledgerTotalAmount(type) {
+  const sum = (rows) => (rows || []).reduce((total, item) => total + Number(item.amount || 0), 0);
+  if (type) return sum(db[type]);
+  return sum(db.expenses) + sum(db.consumption);
 }
 
 function renderParticipants() {
@@ -548,19 +610,21 @@ function renderRundownCard(item, showActions = false) {
   `;
 }
 
-function renderLedger(type, title) {
+function renderLedger(type, title, subtitle) {
   const rows = db[type] || [];
   const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const admin = isAdmin();
 
   return `
-    <div class="page-toolbar toolbar">
+    <div class="ledger-intro card">
       <div>
         <p class="section-kicker">${escapeHtml(title).toUpperCase()}</p>
-        <h3 class="toolbar-title">${escapeHtml(rows.length)} data tersimpan</h3>
+        <h3>${escapeHtml(subtitle || title)}</h3>
+        <p class="muted">Setiap item dilengkapi kategori, jumlah, dan foto bukti. Foto dibuka dengan menekan pratinjaunya.</p>
       </div>
       <div class="toolbar toolbar-right">
-        <span class="status-pill">Total ${formatMoney(total)}</span>
-        <button class="btn primary" data-add="${type}">+ Tambah data</button>
+        <span class="status-pill">${escapeHtml(rows.length)} data · Total ${formatMoney(total)}</span>
+        ${admin ? `<button class="btn primary" data-add="${type}">+ Tambah data</button>` : '<span class="status-pill readonly-pill">Mode lihat</span>'}
       </div>
     </div>
     <div class="section">
@@ -573,8 +637,8 @@ function renderLedger(type, title) {
                 <th>Item</th>
                 <th>Kategori</th>
                 <th>Jumlah</th>
-                <th>Foto</th>
-                <th>Aksi</th>
+                <th>Foto bukti</th>
+                ${admin ? '<th>Aksi</th>' : ''}
               </tr>
             </thead>
             <tbody>
@@ -584,27 +648,95 @@ function renderLedger(type, title) {
                   <td data-label="Item"><b>${escapeHtml(item.item || '-')}</b></td>
                   <td data-label="Kategori">${escapeHtml(item.category || '-')}</td>
                   <td data-label="Jumlah">${formatMoney(item.amount)}</td>
-                  <td data-label="Foto">${item.photo ? '<span class="badge success">Ada foto</span>' : '-'}</td>
+                  <td data-label="Foto bukti">${renderLedgerPhoto(item, type)}</td>
+                  ${admin ? `
                   <td data-label="Aksi" class="actions">
                     <button class="link-btn" data-edit="${escapeHtml(item.id)}" data-type="${type}">Edit</button>
                     <button class="link-btn danger-link" data-delete="${escapeHtml(item.id)}" data-type="${type}">Hapus</button>
                   </td>
+                  ` : ''}
                 </tr>
               `).join('')}
             </tbody>
           </table>
-        ` : '<div class="empty">Belum ada data.</div>'}
+        ` : '<div class="empty">Belum ada data pembelian/konsumsi yang bisa ditampilkan.</div>'}
       </div>
     </div>
   `;
 }
 
+/**
+ * Receipt thumbnail for a ledger row. `detailIndex` lets the delegated click
+ * handler open the full-size photo without embedding base64 in an attribute.
+ */
+function renderLedgerPhoto(item, type, detailIndex) {
+  if (!item.photo) return '<span class="muted">Tanpa foto</span>';
+  const index = detailIndex === undefined ? (db[type] || []).findIndex((row) => row.id === item.id) : detailIndex;
+  return `
+    <button type="button" class="receipt-thumb" data-receipt="${escapeHtml(type)}" data-receipt-index="${index}"
+            title="Lihat foto bukti" aria-label="Lihat foto bukti ${escapeHtml(item.item || '')}">
+      <img src="${escapeHtml(item.photo)}" alt="Foto bukti ${escapeHtml(item.item || '')}" loading="lazy">
+    </button>`;
+}
+
 function renderExpenses() {
-  return renderLedger('expenses', 'Pembelian barang');
+  return renderLedger('expenses', 'Pembelian barang', 'Rincian pembelian dan foto bukti');
 }
 
 function renderConsumption() {
-  return renderLedger('consumption', 'Konsumsi');
+  return renderLedger('consumption', 'Konsumsi', 'Rincian konsumsi dan foto bukti');
+}
+
+/** Read-only detail so members can inspect a purchase/consumption item. */
+function openLedgerDetail(type, id) {
+  const list = db[type] || [];
+  const index = id && !/^\d+$/.test(String(id))
+    ? list.findIndex((row) => row.id === id)
+    : Number(id);
+  const item = index >= 0 ? list[index] : null;
+  if (!item) return showToast('Data tidak ditemukan. Muat ulang halaman lalu coba lagi.');
+  openItemDetailDialog(item, { type, index });
+}
+
+function openItemDetailDialog(item, { type, index }) {
+  const title = type === 'expenses' ? 'Rincian pembelian barang' : 'Rincian konsumsi';
+  const rows = [
+    ['Tanggal', formatDate(item.date)],
+    ['Item', item.item || '-'],
+    ['Kategori', item.category || '-'],
+    ['Jumlah', formatMoney(item.amount)],
+    ['Bukti foto', item.photo ? 'Foto tersedia' : 'Belum ada foto']
+  ].map(([label, value]) => `
+    <div class="detail-row"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+
+  const photo = item.photo
+    ? `<figure class="receipt-figure">
+         <img src="${escapeHtml(item.photo)}" alt="Foto bukti ${escapeHtml(item.item || '')}">
+         <figcaption class="muted">Foto bukti pembelian/konsumsi</figcaption>
+       </figure>`
+    : '<p class="report-note">Belum ada foto bukti untuk item ini.</p>';
+
+  $reportData.__item = { item, type, index };
+  openReportDialog(title, `
+    <div class="report">
+      <div class="detail-grid">${rows}</div>
+      ${photo}
+      <div class="toolbar">
+        <button type="button" class="btn ghost" data-action="receipt-prev">← Sebelumnya</button>
+        <button type="button" class="btn ghost" data-action="receipt-next">Berikutnya →</button>
+      </div>
+      <p class="muted">Halaman rincian ini hanya membaca data; tidak ada perubahan yang dikirim ke Supabase.</p>
+    </div>`);
+}
+
+/** Prev/next within the same ledger, keeping the detail dialog open. */
+function openLedgerDetailStep(step) {
+  const current = $reportData.__item;
+  if (!current) return;
+  const list = db[current.type] || [];
+  if (!list.length) return;
+  const next = (current.index + step + list.length) % list.length;
+  openItemDetailDialog(list[next], { type: current.type, index: next });
 }
 
 function renderReports() {
@@ -733,6 +865,22 @@ function formFields(type, item = {}) {
   `;
 }
 
+/**
+ * <dialog>.showModal() is missing in older browsers; fall back to the `open`
+ * attribute so a report is never lost to an exception.
+ */
+function showDialogElement(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function closeDialogElement(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === 'function') dialog.close();
+  else dialog.removeAttribute('open');
+}
+
 function openDialog(type, id = null) {
   if (!isAdmin()) {
     showToast('Hanya admin yang dapat mengubah data.');
@@ -756,16 +904,132 @@ function openDialog(type, id = null) {
   $('#data-dialog').dataset.type = type;
   $('#dialog-save').classList.remove('hidden');
   $('#dialog-fields').innerHTML = formFields(type, item);
-  $('#data-dialog').showModal();
+  showDialogElement($('#data-dialog'));
 }
 
 /** Read-only dialog used by the Supabase diagnosis report. */
 function openReportDialog(title, html) {
+  const dialog = $('#data-dialog');
+  if (!dialog) return;
+  // showModal() throws when the dialog is already open (e.g. a report triggered
+  // while the data form is open), so reopen it deliberately instead.
+  if (dialog.open) closeDialogElement(dialog);
   $('#dialog-title').textContent = title;
-  $('#data-dialog').dataset.type = 'report';
+  dialog.dataset.type = 'report';
   $('#dialog-save').classList.add('hidden');
   $('#dialog-fields').innerHTML = html;
-  $('#data-dialog').showModal();
+  showDialogElement(dialog);
+}
+
+const UPLOAD_STATUS_TAG = { terkirim: 'ok', ditolak: 'bad', dilewati: '' };
+
+/**
+ * Upload results in a table, plus the exact reason and next step per table.
+ * `report` comes from supabase-sync.js (window.OUTING_SYNC_LAST_UPLOAD).
+ */
+function renderUploadReport(report) {
+  if (!report) {
+    return '<div class="report"><p class="report-note">Belum ada percobaan upload pada sesi ini. Klik <b>↻ Upload ke Supabase</b> untuk mencoba; hasilnya akan tampil di sini.</p></div>';
+  }
+
+  const rows = report.tables.map((table) => {
+    const tag = UPLOAD_STATUS_TAG[table.status] ?? '';
+    const extra = table.hint ? `<br><small class="muted">Langkah: ${escapeHtml(table.hint)}</small>` : '';
+    return `
+    <tr>
+      <td><b>${escapeHtml(table.table)}</b></td>
+      <td><span class="tag ${tag}">${escapeHtml(table.status)}</span></td>
+      <td>${escapeHtml(table.detail)}${extra}</td>
+    </tr>`;
+  }).join('');
+
+  const counts = report.counts || { failed: 0, skipped: 0, sent: 0 };
+  const failedList = report.failedTables.join(', ');
+  const conclusion = report.ok
+    ? `<p class="report-note ok"><b>Upload diterima server.</b> ${counts.sent} tabel dikirim${counts.skipped ? `, ${counts.skipped} tabel dilewati karena kosong di browser ini` : ''}.</p>`
+    : `<p class="report-note bad"><b>Upload ditolak pada ${counts.failed} tabel: ${escapeHtml(failedList)}.</b></p>
+       ${report.blockedMessage ? `<p class="report-note">${escapeHtml(report.blockedMessage)}</p>` : ''}
+       ${report.tables.find((table) => table.hint) ? `<p class="report-note">Langkah berikutnya: ${escapeHtml(report.tables.find((table) => table.hint).hint)}</p>` : ''}`;
+
+  const session = report.session || {};
+  const sessionText = session.active
+    ? `Session Supabase aktif sebagai <b>${escapeHtml(session.email || '-')}</b> (role: ${escapeHtml(session.role || 'tidak ada')})`
+    : '<b>Tidak ada session Supabase.</b> Login lokal <code>admin / power88</code> hanya membuka aplikasi di browser; policy tulis default menolak role anon, sehingga tabel yang berisi data akan gagal.';
+
+  const adminHint = report.ok || session.role === 'admin'
+    ? ''
+    : '<p class="report-note">Perbaiki dengan: Supabase → Authentication → Users → Add user (email + password), set <code>app_metadata.role = "admin"</code> lewat SQL Editor, lalu di aplikasi isi form login dengan email/password itu — bukan <code>admin/power88</code>.</p>';
+
+  return `
+    <div class="report">
+      ${conclusion}
+      ${adminHint}
+      <p class="muted"><b>Dikirim:</b> ${escapeHtml(new Date(report.at).toLocaleString('id-ID'))}<br>${sessionText}</p>
+      <table class="diagnose-table">
+        <thead><tr><th>Tabel</th><th>Status</th><th>Keterangan</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="muted">Tabel yang kosong di browser ini dilewati: tidak ada yang dikirim dan tidak ada yang dihapus. Baris Supabase yang tidak ada di browser ini <b>dihapus</b> pada tabel yang dikirim.</p>
+      <button type="button" class="btn ghost" data-action="copy-upload-report">📋 Salin detail</button>
+    </div>`;
+}
+
+function uploadReportText(report) {
+  const session = report.session || {};
+  const lines = report.tables.map((table) => `- ${table.table}: ${table.status.toUpperCase()} — ${table.detail}${table.hint ? ` | langkah: ${table.hint}` : ''}`);
+  return [
+    `Hasil upload ke Supabase (${new Date(report.at).toLocaleString('id-ID')})`,
+    `Status: ${report.ok ? 'diterima' : `ditolak pada ${report.counts?.failed ?? report.failedTables.length} tabel`}`,
+    report.blockedMessage ? `Catatan: ${report.blockedMessage}` : '',
+    `Login: ${session.active ? `${session.email} (role: ${session.role || 'tidak ada'})` : 'tanpa session Supabase (login lokal)'}`,
+    `Dilewati (kosong di browser): ${report.skippedTables.join(', ') || 'tidak ada'}`,
+    ...lines
+  ].filter(Boolean).join('\n');
+}
+
+function openUploadReport(report) {
+  const data = report || window.OUTING_SYNC?.lastUpload?.() || window.OUTING_SYNC_LAST_UPLOAD || null;
+  if (!data) return showToast('Belum ada detail upload pada sesi ini. Klik Upload ke Supabase dulu.');
+  openReportDialog('Hasil Upload ke Supabase', renderUploadReport(data));
+}
+
+/** What the next upload will actually send, table by table. */
+function uploadPlanText() {
+  const counts = [
+    ['participants', (db.participants || []).length],
+    ['rundown', (db.rundown || []).length],
+    ['expenses', (db.expenses || []).length],
+    ['consumption', (db.consumption || []).length],
+    ['outing_categories', (db.categories || []).length],
+    ['outing', 1]
+  ];
+  const sent = counts.filter(([, total]) => total > 0).map(([name, total]) => `${name} (${total})`);
+  const empty = counts.filter(([, total]) => total === 0).map(([name]) => name);
+  return `Akan dikirim: ${sent.join(', ') || 'tidak ada data'}${empty.length ? `. Dilewati karena kosong: ${empty.join(', ')}` : ''}.`;
+}
+
+/** Keeps the "Detail upload" button in sync with the last upload result. */
+function refreshSyncDetailButton() {
+  const button = $('#sync-detail');
+  if (!button) return;
+  const report = window.OUTING_SYNC?.lastUpload?.() || window.OUTING_SYNC_LAST_UPLOAD || null;
+  const failed = report?.counts?.failed ?? report?.failedTables?.length ?? 0;
+  button.classList.toggle('hidden', !report || !isAdmin());
+  if (report) button.textContent = report.ok ? 'ℹ Detail upload' : `⚠ Detail upload (${failed} gagal)`;
+}
+
+async function copyUploadReport() {
+  const report = window.OUTING_SYNC?.lastUpload?.() || window.OUTING_SYNC_LAST_UPLOAD;
+  if (!report) return showToast('Belum ada detail upload untuk disalin.');
+  const text = uploadReportText(report);
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else throw new Error('clipboard tidak tersedia');
+    showToast('Detail upload disalin. Tempelkan ke chat bila perlu bantuan.');
+  } catch {
+    // Clipboard needs a secure context; show the text instead of failing silently.
+    openReportDialog('Detail upload (salin manual)', `<div class="report"><pre style="white-space:pre-wrap;font-size:11px">${escapeHtml(text)}</pre></div>`);
+  }
 }
 
 function renderDiagnoseReport(report) {
@@ -916,7 +1180,7 @@ async function handleFormSubmit(event) {
 
 function closeDialog() {
   const dialog = $('#data-dialog');
-  if (dialog?.open) dialog.close();
+  if (dialog?.open) closeDialogElement(dialog);
   $('#data-form')?.reset();
   editingId = null;
 }
@@ -1249,21 +1513,29 @@ $('#sync-load')?.addEventListener('click', async () => {
 $('#sync-now')?.addEventListener('click', async () => {
   if (!isAdmin()) return showToast('Hanya admin yang dapat upload data.');
   if (!window.OUTING_SYNC?.queue) return showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
-  if (!confirm('Upload akan mengirim seluruh data lokal ke enam tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini. Periksa data lokal sebelum melanjutkan. Upload sekarang?')) return;
+  // Show exactly what will be sent and with which login, so a later "only some
+  // tables failed" message is easy to understand.
+  const loginNote = session?.local
+    ? 'Login saat ini LOKAL (admin/power88), bukan akun Supabase: policy tulis default akan menolak upload.'
+    : `Login Supabase: ${session?.name || 'tidak diketahui'}.`;
+  if (!confirm(`Upload akan mengirim seluruh data lokal ke tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini.\n\n${uploadPlanText()}\n${loginNote}\n\nUpload sekarang?`)) return;
   const button = $('#sync-now');
   button.disabled = true;
   button.textContent = '⟳ Mengupload...';
   try {
     const result = await window.OUTING_SYNC.queue(db);
-    showSyncResult(result, 'Semua data berhasil diupload ke Supabase.');
+    showSyncResult(result, 'Semua data berhasil diupload ke Supabase.', { openReport: true });
   } catch (error) {
     console.error('Upload Supabase gagal:', error);
     showToast('Upload gagal. Data lokal dipertahankan.');
   } finally {
     button.disabled = false;
     button.textContent = '↻ Upload ke Supabase';
+    refreshSyncDetailButton();
   }
 });
+
+$('#sync-detail')?.addEventListener('click', () => openUploadReport());
 
 $('#data-form')?.addEventListener('submit', handleFormSubmit);
 $('#data-dialog')?.addEventListener('click', (event) => {
@@ -1290,6 +1562,9 @@ document.addEventListener('click', (event) => {
   const templateTypeButton = event.target.closest('[data-template-type]');
   if (templateTypeButton) downloadTemplate(templateTypeButton.dataset.templateType);
 
+  const copyReportButton = event.target.closest('[data-action="copy-upload-report"]');
+  if (copyReportButton) copyUploadReport();
+
   if (event.target.closest('[data-action="go-outing"]')) {
     currentPage = 'outing';
     render();
@@ -1298,6 +1573,20 @@ document.addEventListener('click', (event) => {
     currentPage = 'rundown';
     render();
   }
+  if (event.target.closest('[data-action="go-expenses"]')) {
+    currentPage = 'expenses';
+    render();
+  }
+  if (event.target.closest('[data-action="go-consumption"]')) {
+    currentPage = 'consumption';
+    render();
+  }
+
+  const receiptButton = event.target.closest('[data-receipt]');
+  if (receiptButton) openLedgerDetail(receiptButton.dataset.receipt, receiptButton.dataset.receiptIndex);
+
+  if (event.target.closest('[data-action="receipt-prev"]')) openLedgerDetailStep(-1);
+  if (event.target.closest('[data-action="receipt-next"]')) openLedgerDetailStep(1);
 });
 
 document.addEventListener('input', (event) => {
