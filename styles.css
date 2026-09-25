@@ -332,6 +332,12 @@ dialog::backdrop { background: rgba(16, 35, 45, .42); }
 
 /* Supabase diagnosis report */
 .report { display: grid; gap: 12px; }
+/* Reports are rendered into #dialog-fields, which is a 2-column .form-grid:
+   without this they only take the left half of the dialog. */
+.form-grid > .report { grid-column: 1 / -1; }
+.setup-steps { margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.7; color: #41545f; }
+.setup-steps li + li { margin-top: 6px; }
+.setup-steps a { color: var(--primary-dark); }
 .report-note { margin: 0; padding: 11px 13px; border-radius: 10px; background: #f2faf7; color: #3f6a61; font-size: 12px; line-height: 1.55; }
 .report-note.ok { background: #e3f7ee; color: #18845b; }
 .report-note.bad { background: #ffe6e4; color: #a54545; }

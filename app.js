@@ -251,6 +251,50 @@ function sortedRundown() {
 // can read what is being shown without stuffing base64 into HTML attributes.
 const $reportData = { __item: null };
 
+/**
+ * Signs in with a real Supabase account and refuses anyone without the admin
+ * role. Used by both the login screen and the "login admin, lalu upload" panel,
+ * so the two paths can never apply different rules.
+ * Returns { ok, email } or { ok: false, message, needRole? }.
+ */
+async function signInSupabaseAdmin(email, password) {
+  const authClient = window.OUTING_SYNC?.client;
+  if (!authClient) {
+    return { ok: false, message: 'Koneksi Supabase belum siap. Tunggu sebentar atau periksa koneksi CDN.' };
+  }
+  const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+  if (error || !data?.user) {
+    const raw = error?.message || '';
+    // mailer_autoconfirm is off by default on new projects, so this is the
+    // second most common wall right after "role admin belum di-set".
+    if (/email not confirmed/i.test(raw)) {
+      return {
+        ok: false,
+        needRole: true,
+        message: `Email ${email} belum dikonfirmasi. Buka link konfirmasi di inbox, atau buat ulang user di dashboard dengan mencentang "Auto Confirm User".`
+      };
+    }
+    return {
+      ok: false,
+      message: /invalid login credentials/i.test(raw)
+        ? 'Email/password tidak cocok dengan akun Supabase mana pun. (admin/power88 adalah login lokal, bukan akun Supabase.)'
+        : `Login Supabase gagal: ${raw || 'penyebab tidak diketahui'}.`
+    };
+  }
+  if (data.user.app_metadata?.role !== 'admin') {
+    // Never keep a session that cannot write: it would only fail later at upload.
+    await authClient.auth.signOut({ scope: 'local' });
+    return {
+      ok: false,
+      needRole: true,
+      message: `Akun ${data.user.email || email} belum punya app_metadata.role = "admin", jadi upload pasti ditolak. Jalankan SQL admin dulu.`
+    };
+  }
+  window.OUTING_LOCAL_LOGIN = false;
+  session = { role: 'admin', name: data.user.email || 'Admin Supabase', local: false };
+  return { ok: true, email: data.user.email || email };
+}
+
 async function login(event) {
   event.preventDefault();
   const userId = $('#login-id').value.trim();
@@ -280,22 +324,15 @@ async function login(event) {
     return;
   }
 
-  const authClient = window.OUTING_SYNC.client;
   try {
-    const { data, error } = await authClient.auth.signInWithPassword({ email: userId, password });
-    if (error || !data?.user) {
-      showToast(/invalid login credentials/i.test(error?.message || '')
-        ? 'Email/password Supabase tidak sesuai. Login lokal admin/power88 hanya menyimpan data di browser.'
-        : `Login Supabase gagal: ${error?.message || 'penyebab tidak diketahui'}.`);
+    const signedIn = await signInSupabaseAdmin(userId, password);
+    if (!signedIn.ok) {
+      showToast(signedIn.message);
+      // Missing role (or unconfirmed email): hand over the exact SQL and the
+      // dashboard links instead of sending the user hunting through a .sql file.
+      if (signedIn.needRole) openAdminSetupDialog({ email: userId });
       return;
     }
-    if (data.user.app_metadata?.role !== 'admin') {
-      await authClient.auth.signOut({ scope: 'local' });
-      showToast('Akun Supabase ini belum memiliki role admin (app_metadata.role = "admin").');
-      return;
-    }
-    window.OUTING_LOCAL_LOGIN = false;
-    session = { role: 'admin', name: data.user.email || 'Admin Supabase', local: false };
     startApp();
     // Preserve unsynced local rows; explicitly choose Upload or Muat if needed.
     const loaded = await window.OUTING_SYNC.load();
@@ -317,7 +354,7 @@ function startApp() {
   refreshSyncDetailButton();
   // Warn before the first upload attempt instead of after a confusing failure.
   if (isAdmin() && session.local) {
-    showToast('Login lokal: data hanya tersimpan di browser ini. Untuk upload, logout lalu login dengan email/password admin Supabase (lihat supabase-set-admin.sql).');
+    showToast('Login lokal: data hanya tersimpan di browser ini. Klik ↻ Upload ke Supabase untuk membuka panel login admin Supabase (data lokal tetap aman).');
   }
 }
 
@@ -962,10 +999,12 @@ function renderUploadReport(report) {
         <b>Cara memperbaiki (5 menit, sekali saja):</b>
         <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
           <li>Supabase → <b>Authentication → Users → Add user</b>: buat email + password baru, centang <b>Auto Confirm User</b>.</li>
-          <li>Supabase → <b>SQL Editor</b>: buka file <code>supabase-set-admin.sql</code> dari repo ini, ganti email pada <b>dua</b> baris <code>&lt;&lt;&lt; GANTI EMAIL DI SINI</code>, jalankan seluruh isinya (mengisi <code>app_metadata.role = "admin"</code>). Hasil verifikasi harus semua <b>OK</b>.</li>
-          <li>Di aplikasi klik <b>↪ Keluar</b>, lalu login dengan <b>email + password Supabase itu</b> — bukan <code>admin / power88</code>.</li>
-          <li>Klik <b>🩺 Cek Supabase</b> untuk memastikan baca OK, periksa isi data lokal, lalu klik <b>↻ Upload ke Supabase</b>.</li>
+          <li>Supabase → <b>SQL Editor</b>: jalankan SQL yang mengisi <code>app_metadata.role = "admin"</code> untuk email itu. Tombol di bawah membuatkan SQL-nya dengan email Anda sudah terisi (isinya sama dengan <code>supabase-set-admin.sql</code>); hasil verifikasinya harus semua <b>OK</b>.</li>
+          <li>Login dengan <b>email + password Supabase itu</b> — bukan <code>admin / power88</code> — lalu Upload lagi. Bisa dilakukan langsung dari panel itu tanpa keluar dulu; data lokal tidak hilang.</li>
         </ol>
+        <div class="toolbar" style="margin-top:10px">
+          <button type="button" class="btn primary" data-action="open-admin-setup">🔑 Buka panel perbaikan upload</button>
+        </div>
         <p class="muted" style="margin:8px 0 0">Jangan aktifkan tulis <code>anon</code> (OPSI 3 di schema): siapa pun dengan anon key publik bisa menghapus semua data tanpa login.</p>
       </div>`;
 
@@ -1044,6 +1083,188 @@ async function copyUploadReport() {
   }
 }
 
+// --------------------------------------------------------------------------
+// Turning a Supabase account into an admin, from inside the app.
+//
+// "permission denied for table ..." / 42501 while logged in as admin/power88 is
+// not a bug: there is no Supabase session, so the server only sees role "anon"
+// and the write policies refuse it. The fix has to happen in the Supabase
+// dashboard, so this panel (a) generates the exact SQL with the user's own
+// email already filled in, (b) links straight to the dashboard pages, and
+// (c) lets them log in with that account and upload without leaving the page.
+// --------------------------------------------------------------------------
+
+/** Project ref, for deep links into the Supabase dashboard. */
+function supabaseProjectRef() {
+  const host = String(window.OUTING_CONFIG?.SUPABASE_URL || '').replace(/^https?:\/\//, '').split('/')[0];
+  return host.split('.')[0] || '';
+}
+
+/**
+ * Ready-to-run SQL that makes one account an admin, mirroring
+ * supabase-set-admin.sql (kept in sync by tests/admin-setup.test.cjs).
+ */
+function adminSetupSql(email) {
+  const address = String(email || '').trim() || 'admin@domainanda.com';
+  return `-- Outing Hub: jadikan ${address} admin Supabase (sama dengan supabase-set-admin.sql)
+-- Supabase -> SQL Editor -> tempel seluruh isi ini -> Run. Aman diulang.
+do $$
+declare
+  admin_email text := '${address}';
+  n int;
+begin
+  update auth.users
+     set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
+                             || '{"role":"admin"}'::jsonb
+   where email = admin_email;
+
+  get diagnostics n = row_count;
+
+  if n = 0 then
+    raise notice 'PERINGATAN: tidak ada user dengan email %. Buat dulu di Authentication -> Users (centang "Auto Confirm User"), lalu jalankan ulang SQL ini.', admin_email;
+  else
+    raise notice 'OK: % baris diupdate, % sekarang punya app_metadata.role = admin.', n, admin_email;
+  end if;
+end $$;
+
+-- Verifikasi: role admin + policy tulis + grant tulis untuk keenam tabel.
+-- Semua baris "status" harus diawali OK; kalau ada HILANG, jalankan seluruh
+-- supabase-schema.sql sekali lalu ulangi SQL di atas.
+with cfg(admin_email) as (
+  values ('${address}')
+),
+tabel(nama) as (
+  values ('participants'), ('rundown'), ('expenses'),
+         ('consumption'), ('outing'), ('outing_categories')
+),
+cek_role as (
+  select 1 as urutan, 'role admin' as kategori,
+         coalesce(u.email, c.admin_email) as item,
+         case when u.id is null
+                then 'HILANG - user belum dibuat di Authentication -> Users (atau email salah)'
+              when (u.raw_app_meta_data ->> 'role') = 'admin'
+                then 'OK - akun ini boleh menulis (upload)'
+              else 'BELUM admin - upload akan tetap ditolak'
+         end as status
+    from cfg c
+    left join auth.users u on u.email = c.admin_email
+),
+cek_policy as (
+  select 2 as urutan, 'policy tulis admin' as kategori, t.nama as item,
+         case when p.policyname is null then 'HILANG - jalankan supabase-schema.sql'
+              else 'OK (' || p.policyname || ')' end as status
+    from tabel t
+    left join pg_policies p
+           on p.schemaname = 'public' and p.tablename = t.nama
+          and p.policyname like 'admin write%'
+),
+cek_grant as (
+  select 3 as urutan, 'grant tulis (INSERT)' as kategori, t.nama as item,
+         case when has_table_privilege('authenticated'::name,
+                                       format('public.%I', t.nama)::regclass,
+                                       'INSERT')
+                then 'OK - authenticated boleh INSERT'
+              else 'HILANG - jalankan supabase-schema.sql' end as status
+    from tabel t
+)
+select kategori, item, status
+  from (select * from cek_role
+        union all select * from cek_policy
+        union all select * from cek_grant) v
+ order by urutan, item;`;
+}
+
+/** The panel shown when an upload cannot possibly succeed with this login. */
+function renderAdminSetupPanel(email = '') {
+  const ref = supabaseProjectRef();
+  const dashboard = ref ? `https://supabase.com/dashboard/project/${ref}` : 'https://supabase.com/dashboard';
+  const loginEmail = String(session?.local ? '' : session?.name || email || '');
+  return `
+    <div class="report">
+      <p class="report-note bad"><b>Penyebab upload ditolak:</b> login yang aktif sekarang <b>lokal</b> (<code>admin / power88</code>), jadi tidak ada session Supabase. Server hanya melihat peran <code>anon</code> yang hak tulisnya memang dicabut, sehingga tiap tabel berisi data pasti gagal dengan <code>permission denied</code> / <code>42501</code>. Mengulang Upload tidak akan mengubah apa pun — yang harus ditambah adalah <b>akun admin Supabase</b>.</p>
+      <ol class="setup-steps">
+        <li><b>Buat user di Supabase.</b> <a href="${dashboard}/auth/users" target="_blank" rel="noopener">Authentication → Users → Add user</a>, isi email + password, <b>centang "Auto Confirm User"</b> (kalau lupa dicentang, login akan ditolak dengan "Email not confirmed").</li>
+        <li><b>Beri role admin.</b> Salin SQL di bawah (email Anda sudah terisi), tempel di <a href="${dashboard}/sql/new" target="_blank" rel="noopener">SQL Editor</a>, lalu <b>Run</b>. Semua baris <i>status</i> di tab Results harus diawali <b>OK</b>.</li>
+        <li><b>Login & upload dari sini.</b> Isi email + password akun itu di bawah; data lokal di browser ini tidak hilang saat login.</li>
+      </ol>
+      <div class="form-grid">
+        <label>Email admin Supabase
+          <input id="admin-setup-email" type="email" autocomplete="username" placeholder="nama@domainanda.com" value="${escapeHtml(email || loginEmail)}">
+        </label>
+      </div>
+      <pre id="admin-setup-sql" style="white-space:pre-wrap;font-size:11px;max-height:220px;overflow:auto">${escapeHtml(adminSetupSql(email || loginEmail))}</pre>
+      <div class="toolbar">
+        <button type="button" class="btn ghost" data-action="copy-admin-sql">📋 Salin SQL</button>
+        <a class="btn ghost" href="${dashboard}/auth/users" target="_blank" rel="noopener">Buka Users</a>
+        <a class="btn ghost" href="${dashboard}/sql/new" target="_blank" rel="noopener">Buka SQL Editor</a>
+      </div>
+      <hr>
+      <p class="report-note"><b>Langkah 3:</b> login memakai akun admin Supabase itu, lalu upload langsung dikirim.</p>
+      <div class="form-grid">
+        <label>Email<input id="admin-login-email" type="email" autocomplete="username" value="${escapeHtml(email || loginEmail)}"></label>
+        <label>Password<input id="admin-login-password" type="password" autocomplete="current-password"></label>
+      </div>
+      <div class="toolbar">
+        <button type="button" class="btn primary" data-action="admin-login-upload">🔐 Login admin & upload sekarang</button>
+        <button type="button" class="btn ghost" data-action="upload-anyway">Tetap coba upload dengan login lokal</button>
+      </div>
+      <p class="muted"><b>Yang akan dikirim:</b> ${escapeHtml(uploadPlanText())} Upload menyamakan Supabase dengan isi browser ini, jadi baris Supabase yang tidak ada di sini akan <b>dihapus</b>.</p>
+      <p class="muted">Tombol "tetap coba" hanya berguna kalau Anda <b>sengaja</b> mengaktifkan tulis anon (OPSI 3 di supabase-schema.sql). Jangan dipakai untuk data peserta: siapa pun yang memegang anon key publik bisa menghapus seluruh data tanpa login.</p>
+    </div>`;
+}
+
+function openAdminSetupDialog({ email = '' } = {}) {
+  openReportDialog('🔑 Bikin akun admin Supabase (perbaikan upload)', renderAdminSetupPanel(email));
+}
+
+async function copyAdminSql() {
+  const sql = adminSetupSql($('#admin-setup-email')?.value || '');
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(sql);
+    else throw new Error('clipboard tidak tersedia');
+    showToast('SQL admin disalin. Tempel di SQL Editor Supabase, lalu Run.');
+  } catch {
+    openReportDialog('SQL admin (salin manual)', `<div class="report"><pre style="white-space:pre-wrap;font-size:11px">${escapeHtml(sql)}</pre></div>`);
+  }
+}
+
+/** Keep the SQL preview in step with the email the user is typing. */
+function refreshAdminSqlPreview() {
+  const target = $('#admin-setup-sql');
+  if (!target) return;
+  target.textContent = adminSetupSql($('#admin-setup-email')?.value || '');
+}
+
+/**
+ * Signs in with the Supabase admin account typed in the panel and uploads
+ * straight away, so the user never has to log out and lose sight of the data.
+ */
+async function adminLoginAndUpload() {
+  const email = String($('#admin-login-email')?.value || '').trim();
+  const password = String($('#admin-login-password')?.value || '');
+  if (!email || !password) return showToast('Isi email dan password akun admin Supabase dulu.');
+  const button = document.querySelector('[data-action="admin-login-upload"]');
+  if (button) { button.disabled = true; button.textContent = '⟳ Mencoba login...'; }
+  try {
+    const signedIn = await signInSupabaseAdmin(email, password);
+    if (!signedIn.ok) {
+      showToast(signedIn.message);
+      if (signedIn.needRole) refreshAdminSqlPreview();
+      return { ok: false, message: signedIn.message };
+    }
+    startApp();
+    closeDialogElement($('#data-dialog'));
+    showToast(`Login Supabase OK: ${signedIn.email}. Mengupload...`);
+    const result = await runUpload({ skipConfirm: true });
+    return { ok: Boolean(result?.ok), result };
+  } finally {
+    if (button && document.contains(button)) {
+      button.disabled = false;
+      button.textContent = '🔐 Login admin & upload sekarang';
+    }
+  }
+}
+
 function renderDiagnoseReport(report) {
   const statusRow = (ok) => (ok === 'ok'
     ? '<span class="tag ok">OK</span>'
@@ -1065,7 +1286,8 @@ function renderDiagnoseReport(report) {
     : `<p class="report-note bad"><b>Ada ${report.problems.length} tabel dengan masalah baca/skema.</b></p>
        ${report.hint ? `<p class="report-note">Langkah berikutnya: ${escapeHtml(report.hint)}</p>` : ''}`;
   const loginHint = report.session.role !== 'admin'
-    ? '<p class="report-note">Untuk mengirim data, buat akun admin di Supabase Authentication dengan app_metadata.role = "admin", lalu login memakai email/password akun itu.</p>'
+    ? `<p class="report-note">Untuk mengirim data, buat akun admin di Supabase Authentication dengan app_metadata.role = "admin", lalu login memakai email/password akun itu.</p>
+       <div class="toolbar"><button type="button" class="btn ghost" data-action="open-admin-setup">🔑 Cara bikin akun admin + SQL-nya</button></div>`
     : '';
 
   return `
@@ -1522,29 +1744,56 @@ $('#sync-load')?.addEventListener('click', async () => {
   }
 });
 
-$('#sync-now')?.addEventListener('click', async () => {
-  if (!isAdmin()) return showToast('Hanya admin yang dapat upload data.');
-  if (!window.OUTING_SYNC?.queue) return showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+/**
+ * Sends the whole local snapshot to Supabase. `skipConfirm` is used by the
+ * admin-login panel, which has already shown what will happen.
+ */
+async function runUpload({ skipConfirm = false } = {}) {
+  if (!window.OUTING_SYNC?.queue) {
+    showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+    return { ok: false, notConfigured: true };
+  }
   // Show exactly what will be sent and with which login, so a later "only some
   // tables failed" message is easy to understand.
   const loginNote = session?.local
-    ? 'Login saat ini LOKAL (admin/power88), bukan akun Supabase: policy tulis default PASTI menolak upload (permission denied / 42501). Batalkan, logout, login dengan email+password admin Supabase (lihat supabase-set-admin.sql), lalu Upload lagi. Lanjut hanya jika Anda sengaja mengaktifkan tulis anon (tidak disarankan untuk data peserta).'
+    ? 'Login saat ini LOKAL (admin/power88), bukan akun Supabase: policy tulis default PASTI menolak upload (permission denied / 42501). Batalkan, lalu login dengan email+password admin Supabase lewat panel 🔑. Lanjut hanya jika Anda sengaja mengaktifkan tulis anon (tidak disarankan untuk data peserta).'
     : `Login Supabase: ${session?.name || 'tidak diketahui'}.`;
-  if (!confirm(`Upload akan mengirim seluruh data lokal ke tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini.\n\n${uploadPlanText()}\n${loginNote}\n\nUpload sekarang?`)) return;
+  if (!skipConfirm && !confirm(`Upload akan mengirim seluruh data lokal ke tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini.\n\n${uploadPlanText()}\n${loginNote}\n\nUpload sekarang?`)) {
+    return { ok: false, cancelled: true };
+  }
   const button = $('#sync-now');
-  button.disabled = true;
-  button.textContent = '⟳ Mengupload...';
+  if (button) { button.disabled = true; button.textContent = '⟳ Mengupload...'; }
   try {
     const result = await window.OUTING_SYNC.queue(db);
     showSyncResult(result, 'Semua data berhasil diupload ke Supabase.', { openReport: true });
+    return result;
   } catch (error) {
     console.error('Upload Supabase gagal:', error);
     showToast('Upload gagal. Data lokal dipertahankan.');
+    return { ok: false, error };
   } finally {
-    button.disabled = false;
-    button.textContent = '↻ Upload ke Supabase';
+    if (button) { button.disabled = false; button.textContent = '↻ Upload ke Supabase'; }
     refreshSyncDetailButton();
   }
+}
+
+/**
+ * Decides what "Upload" should do before anything is sent.
+ * A local login has no Supabase session, so all six writes are refused by
+ * design (42501 "permission denied for table ..."). Firing them anyway only
+ * produces a red report, so return "needs-admin" and open the panel that
+ * actually fixes it instead.
+ */
+function uploadPreflight() {
+  if (!isAdmin()) { showToast('Hanya admin yang dapat upload data.'); return 'denied'; }
+  if (!window.OUTING_SYNC?.queue) { showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.'); return 'not-configured'; }
+  if (session.local) { openAdminSetupDialog(); return 'needs-admin'; }
+  return 'ready';
+}
+
+$('#sync-now')?.addEventListener('click', async () => {
+  if (uploadPreflight() !== 'ready') return;
+  await runUpload();
 });
 
 $('#sync-detail')?.addEventListener('click', () => openUploadReport());
@@ -1577,6 +1826,14 @@ document.addEventListener('click', (event) => {
   const copyReportButton = event.target.closest('[data-action="copy-upload-report"]');
   if (copyReportButton) copyUploadReport();
 
+  if (event.target.closest('[data-action="copy-admin-sql"]')) copyAdminSql();
+  if (event.target.closest('[data-action="admin-login-upload"]')) adminLoginAndUpload();
+  if (event.target.closest('[data-action="open-admin-setup"]')) openAdminSetupDialog();
+  if (event.target.closest('[data-action="upload-anyway"]')) {
+    closeDialogElement($('#data-dialog'));
+    runUpload();
+  }
+
   if (event.target.closest('[data-action="go-outing"]')) {
     currentPage = 'outing';
     render();
@@ -1602,11 +1859,21 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('input', (event) => {
+  if (event.target.id === 'admin-setup-email') refreshAdminSqlPreview();
   if (event.target.id !== 'participant-search') return;
   const term = event.target.value.toLowerCase().trim();
   const filtered = db.participants.filter((participant) => `${participant.name} ${participant.phone}`.toLowerCase().includes(term));
   const table = $('#participant-table');
   if (table) table.innerHTML = renderParticipantTable(filtered, true);
+});
+
+// The report dialog lives inside <form method="dialog">, so Enter in one of the
+// admin-login inputs would just close the dialog. Turn it into "login + upload".
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  if (event.target.id !== 'admin-login-email' && event.target.id !== 'admin-login-password') return;
+  event.preventDefault();
+  adminLoginAndUpload();
 });
 
 document.addEventListener('change', (event) => {
