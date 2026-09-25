@@ -97,12 +97,91 @@ alter table public.outing_categories add column if not exists created_at timesta
 
 -- Pindahkan nomor telepon dari kolom lama, lalu rapikan kolomnya.
 -- Catatan: project lama memakai enum member_status untuk participants.status
--- sehingga UPDATE status='Ikut' gagal dengan error 22P02 invalid input value
--- for enum member_status. Blok di bawah mengubah enum menjadi text terlebih
--- dulu agar migrasi idempotent dan bisa dijalankan ulang.
+-- sehingga UPDATE status='Ikut' gagal 22P02. Di beberapa project ada VIEW
+-- v_outing_participant_summary yang depend pada kolom status sehingga ALTER TYPE
+-- gagal 0A000 cannot alter type of a column used by a view or rule.
+-- Blok di bawah menangani keduanya: tambah nilai enum yang hilang, simpan definisi
+-- VIEW, DROP VIEW, ubah ke text, lalu recreate.
 do $$
+declare
+  v_def text;
+  rec record;
 begin
-  -- 0) Jika status/payment masih bertipe enum (member_status dkk), ubah ke text
+  -- 0a) Tambah nilai enum yang hilang agar UPDATE bisa sukses walau masih enum
+  begin
+    execute 'alter type public.member_status add value if not exists ''Ikut''';
+  exception when duplicate_object then null when others then null;
+  end;
+  begin
+    execute 'alter type public.member_status add value if not exists ''Batal ikut''';
+  exception when duplicate_object then null when others then null;
+  end;
+  begin
+    execute 'alter type public.member_status add value if not exists ''Tidak ikut''';
+  exception when duplicate_object then null when others then null;
+  end;
+  declare
+    pt text;
+  begin
+    select t.typname into pt
+    from pg_attribute a
+    join pg_class c on c.oid = a.attrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_type t on t.oid = a.atttypid
+    where n.nspname='public' and c.relname='participants' and a.attname='payment' and t.typtype='e';
+    if pt is not null then
+      begin execute format('alter type public.%I add value if not exists %L', pt, 'Belum bayar'); exception when others then null; end;
+      begin execute format('alter type public.%I add value if not exists %L', pt, 'Bayar sebagian'); exception when others then null; end;
+      begin execute format('alter type public.%I add value if not exists %L', pt, 'Sudah bayar'); exception when others then null; end;
+    end if;
+  end;
+
+  -- 0b) Simpan dan DROP VIEW yang depend pada participants.status/payment
+  create temp table if not exists _tmp_outing_view_defs(view_schema text, view_name text, definition text, kind text, primary key(view_schema, view_name));
+  delete from _tmp_outing_view_defs;
+  for rec in
+    select distinct c2.oid as view_oid, c2.relname as view_name, n2.nspname as view_schema, c2.relkind as kind
+    from pg_depend d
+    join pg_attribute a on d.refobjid = a.attrelid and d.refobjsubid = a.attnum
+    join pg_class c on c.oid = a.attrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_class c2 on c2.oid = d.objid
+    join pg_namespace n2 on n2.oid = c2.relnamespace
+    where n.nspname='public' and c.relname='participants'
+      and n2.nspname='public' and c2.relkind in ('v','m')
+      and a.attname in ('status','payment')
+  loop
+    begin
+      select pg_get_viewdef(rec.view_oid, true) into v_def;
+      if v_def is not null then
+        insert into _tmp_outing_view_defs(view_schema, view_name, definition, kind)
+        values (rec.view_schema, rec.view_name, v_def, rec.kind)
+        on conflict (view_schema, view_name) do update set definition = excluded.definition, kind = excluded.kind;
+        if rec.kind = 'm' then
+          execute format('drop materialized view if exists %I.%I cascade', rec.view_schema, rec.view_name);
+        else
+          execute format('drop view if exists %I.%I cascade', rec.view_schema, rec.view_name);
+        end if;
+        raise notice 'Dropped dependent % %.% for enum migration', case when rec.kind='m' then 'materialized view' else 'view' end, rec.view_schema, rec.view_name;
+      end if;
+    exception when others then
+      raise notice 'Gagal drop view %.%: %', rec.view_schema, rec.view_name, SQLERRM;
+    end;
+  end loop;
+  -- tangani v_outing_participant_summary secara eksplisit jika lolos deteksi
+  begin
+    select pg_get_viewdef('public.v_outing_participant_summary'::regclass, true) into v_def;
+    if v_def is not null then
+      insert into _tmp_outing_view_defs(view_schema, view_name, definition, kind)
+      values ('public', 'v_outing_participant_summary', v_def, 'v')
+      on conflict (view_schema, view_name) do update set definition = excluded.definition;
+      execute 'drop view if exists public.v_outing_participant_summary cascade';
+      raise notice 'Dropped view public.v_outing_participant_summary (explicit)';
+    end if;
+  exception when others then null;
+  end;
+
+  -- 0c) Ubah enum ke text (VIEW sudah di-drop jadi tidak 0A000)
   if exists (
     select 1 from pg_attribute a
     join pg_class c on c.oid = a.attrelid
@@ -110,11 +189,13 @@ begin
     join pg_type t on t.oid = a.atttypid
     where n.nspname = 'public' and c.relname = 'participants' and a.attname = 'status' and t.typtype = 'e'
   ) then
-    execute 'alter table public.participants alter column status drop default';
-    execute 'alter table public.participants alter column status type text using status::text';
-    execute 'alter table public.participants alter column status set default ''Ikut''';
+    begin execute 'alter table public.participants alter column status drop default'; exception when others then null; end;
+    begin
+      execute 'alter table public.participants alter column status type text using status::text';
+    exception when others then raise notice 'Alter status to text failed: %', SQLERRM;
+    end;
+    begin execute 'alter table public.participants alter column status set default ''Ikut'''; exception when others then null; end;
   end if;
-
   if exists (
     select 1 from pg_attribute a
     join pg_class c on c.oid = a.attrelid
@@ -122,34 +203,61 @@ begin
     join pg_type t on t.oid = a.atttypid
     where n.nspname = 'public' and c.relname = 'participants' and a.attname = 'payment' and t.typtype = 'e'
   ) then
-    execute 'alter table public.participants alter column payment drop default';
-    execute 'alter table public.participants alter column payment type text using payment::text';
-    execute 'alter table public.participants alter column payment set default ''Belum bayar''';
+    begin execute 'alter table public.participants alter column payment drop default'; exception when others then null; end;
+    begin
+      execute 'alter table public.participants alter column payment type text using payment::text';
+    exception when others then raise notice 'Alter payment to text failed: %', SQLERRM;
+    end;
+    begin execute 'alter table public.participants alter column payment set default ''Belum bayar'''; exception when others then null; end;
   end if;
 
-  -- Fallback generik: paksa ke text untuk tipe enum apa pun, abaikan jika sudah text
-  begin
-    execute 'alter table public.participants alter column status type text using status::text';
-  exception when others then null;
-  end;
-  begin
-    execute 'alter table public.participants alter column payment type text using payment::text';
-  exception when others then null;
-  end;
+  -- Fallback paksa ke text
+  begin execute 'alter table public.participants alter column status type text using status::text'; exception when others then null; end;
+  begin execute 'alter table public.participants alter column payment type text using payment::text'; exception when others then null; end;
 
+  -- 0d) Recreate VIEW
+  for rec in select * from _tmp_outing_view_defs loop
+    begin
+      v_def := replace(rec.definition, '::member_status', '::text');
+      -- hapus cast ke enum lama yang mungkin masih ada (mis ::payment_status)
+      -- biarkan generic, jika gagal recreate akan notice
+      if rec.kind = 'm' then
+        execute format('create materialized view %I.%I as %s', rec.view_schema, rec.view_name, v_def);
+      else
+        execute format('create view %I.%I as %s', rec.view_schema, rec.view_name, v_def);
+      end if;
+      raise notice 'Recreated % %.%', case when rec.kind='m' then 'materialized view' else 'view' end, rec.view_schema, rec.view_name;
+    exception when others then
+      begin
+        -- fallback: coba sebagai view biasa jika materialized gagal atau sebaliknya
+        if rec.kind = 'm' then
+          execute format('create view %I.%I as %s', rec.view_schema, rec.view_name, v_def);
+        else
+          execute format('create materialized view %I.%I as %s', rec.view_schema, rec.view_name, v_def);
+        end if;
+        raise notice 'Recreated (fallback) %.%', rec.view_schema, rec.view_name;
+      exception when others then
+        raise notice 'Gagal recreate view %.%: % -- definisi: %', rec.view_schema, rec.view_name, SQLERRM, v_def;
+      end;
+    end;
+  end loop;
+end $$;
+
+-- Lanjutan migrasi data (phone, status, payment, NOT NULL, dll)
+do $$
+begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'participants' and column_name = 'member_id'
   ) then
-    execute 'update public.participants set phone = coalesce(nullif(phone, ''''), member_id::text, ''-'') where phone is null or phone = ''''';
+    execute 'update public.participants set phone = coalesce(nullif(phone, ''''), member_id::text, ''-'') where phone is null or phone = '''''';
   end if;
 
-  execute 'update public.participants set phone = ''-'' where phone is null or phone = ''''';
+  execute 'update public.participants set phone = ''-'' where phone is null or phone = '''''';
   execute 'alter table public.participants alter column phone set not null';
-  -- pakai ::text agar aman baik untuk kolom text maupun sisa enum yang belum terkonversi
+  -- pakai ::text agar aman baik untuk kolom text maupun sisa enum
   execute 'update public.participants set status = ''Ikut'' where status::text is null or status::text not in (''Ikut'',''Batal ikut'',''Tidak ikut'')';
   execute 'update public.participants set payment = ''Belum bayar'' where payment::text is null or payment::text not in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar'')';
-  -- pastikan default sudah text sebelum NOT NULL
   begin
     execute 'alter table public.participants alter column status set default ''Ikut''';
     execute 'alter table public.participants alter column payment set default ''Belum bayar''';
@@ -168,10 +276,12 @@ begin
 
   execute 'alter table public.participants drop column if exists member_id';
   execute 'alter table public.participants drop column if exists member_password';
+
+  -- bersihkan temp table VIEW jika masih ada
+  begin execute 'drop table if exists _tmp_outing_view_defs'; exception when others then null; end;
 end $$;
 
--- Bersihkan tipe enum lama yang sudah tidak dipakai (member_status dari template lama).
--- Jika masih dipakai di tempat lain, DROP akan diabaikan.
+-- Bersihkan tipe enum lama yang sudah tidak dipakai.
 do $$
 begin
   if exists (select 1 from pg_type where typname = 'member_status' and typnamespace = 'public'::regnamespace) then
@@ -182,7 +292,7 @@ begin
   end if;
 end $$;
 
--- Pastikan constraint text ada untuk migrasi (CREATE IF NOT EXISTS tidak menambah constraint di tabel lama).
+-- Pastikan constraint text ada untuk migrasi.
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'participants_status_text_check' and conrelid = 'public.participants'::regclass) then
