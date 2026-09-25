@@ -1,0 +1,1950 @@
+<!doctype html>
+<!-- Generated file - do not edit. Rebuild with: node tools/build-standalone.mjs -->
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e9f9a" />
+  <title>Outing Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* First-paint fallback only. styles.css is still the source of truth.
+       Without this, a hosting hiccup on styles.css leaves the page raw/unstyled. */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f6f8f9; color: #18232d; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
+    .hidden { display: none !important; }
+    .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: #f5faf9; }
+    .login-card { width: min(440px, 100%); padding: 40px; border-radius: 24px; background: #fff; box-shadow: 0 25px 70px rgba(20, 59, 53, 0.09); }
+    .login-card h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.2; }
+    .eyebrow { margin: 0 0 8px; color: #0e9f9a; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
+    .muted { color: #71808e; line-height: 1.6; }
+    .stack { display: grid; gap: 16px; margin: 24px 0 18px; }
+    .login-note { padding: 12px 14px; border-radius: 10px; background: #f2faf7; color: #4d716a; font-size: 12px; }
+    label { display: grid; gap: 8px; font-weight: 700; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { width: 100%; min-width: 0; border: 1px solid #e5ecee; border-radius: 10px; padding: 12px 13px; background: #fff; color: #18232d; }
+    .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    .btn.primary { background: #0e9f9a; color: #fff; }
+    .wide { width: 100%; display: flex; justify-content: space-between; }
+  </style>
+<style id="app-styles" data-source="styles.css (inlined)">
+/* ===== styles.css (inlined by tools/build-standalone.mjs) ===== */
+:root {
+  --ink: #18232d;
+  --muted: #71808e;
+  --line: #e5ecee;
+  --paper: #ffffff;
+  --bg: #f6f8f9;
+  --primary: #0e9f9a;
+  --primary-dark: #087b78;
+  --primary-soft: #e6f8f2;
+  --orange: #f2994a;
+  --red: #d95c5c;
+  --shadow: 0 12px 35px rgba(23, 48, 66, 0.05);
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; border: 0; }
+.hidden { display: none !important; }
+
+/* Login */
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: radial-gradient(circle at 75% 15%, #d8f2eb, transparent 34%), #f5faf9;
+}
+.login-card {
+  width: min(440px, 100%);
+  padding: 44px;
+  border: 1px solid rgba(229, 236, 238, 0.8);
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 25px 70px rgba(20, 59, 53, 0.09);
+}
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #dff6ee;
+  color: var(--primary);
+  font-size: 25px;
+}
+.eyebrow, .section-kicker {
+  margin: 0 0 8px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.login-card .eyebrow { margin-top: 22px; }
+.login-card h1 { margin: 0 0 12px; font-size: 30px; line-height: 1.2; letter-spacing: -0.7px; }
+.muted { color: var(--muted); line-height: 1.6; }
+.login-card > .muted { margin: 0; }
+.stack { display: grid; gap: 16px; margin: 26px 0 18px; }
+.login-note {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f2faf7;
+  color: #4d716a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Shared controls */
+label { display: grid; gap: 8px; font-weight: 700; }
+input, select, textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 13px;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+}
+textarea { min-height: 90px; resize: vertical; }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(14, 159, 154, 0.09);
+}
+input:disabled, textarea:disabled { color: #51616a; background: #f8fafb; opacity: 1; }
+.btn {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn.primary { background: var(--primary); color: #fff; box-shadow: 0 5px 14px rgba(14, 159, 154, 0.14); }
+.btn.primary:hover { background: var(--primary-dark); }
+.btn.ghost { background: #eef3f3; color: var(--ink); }
+.btn.ghost:hover { background: #e4eeee; }
+.wide { width: 100%; display: flex; justify-content: space-between; }
+.link-btn { padding: 3px 0; background: none; color: var(--primary); font-size: 12px; font-weight: 700; }
+.link-btn:hover { color: var(--primary-dark); text-decoration: underline; }
+.danger-link { color: var(--red); }
+.danger-link:hover { color: #ae4444; }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 29px;
+  padding: 6px 11px;
+  border-radius: 99px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.status-pill[data-tone="syncing"] { background: #fff5df; color: #a76b11; }
+.status-pill[data-tone="error"] { background: #ffe6e4; color: #b44d4d; }
+
+/* App shell */
+.sidebar {
+  position: fixed;
+  z-index: 20;
+  inset: 0 auto 0 0;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 18px;
+  border-right: 1px solid var(--line);
+  background: var(--paper);
+}
+.logo { display: flex; align-items: center; gap: 10px; padding: 0 12px 34px; font-size: 17px; }
+.logo span { padding: 6px 8px; border-radius: 10px; background: #dff6ee; color: var(--primary); }
+.profile { display: flex; align-items: center; gap: 10px; padding: 14px 12px; margin-bottom: 25px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.profile small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.avatar { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 34px; border-radius: 50%; background: #fee5cf; color: #b96525; font-weight: 800; }
+nav { display: grid; gap: 3px; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 13px; padding: 12px; border-radius: 9px; background: transparent; color: var(--muted); text-align: left; }
+.nav-item:first-letter { font-size: 17px; }
+.nav-item.active, .nav-item:hover { background: #e9f8f3; color: var(--primary); font-weight: 700; }
+.logout { display: flex; gap: 10px; align-items: center; margin-top: auto; padding: 12px; background: none; color: var(--muted); text-align: left; }
+.logout:hover { color: var(--red); }
+.main { min-height: 100vh; margin-left: 250px; padding: 34px 5% 55px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 30px; }
+.topbar-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.topbar h2 { margin: 0; font-size: 29px; line-height: 1.15; letter-spacing: -0.7px; }
+.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.menu-toggle { display: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--ink); font-size: 20px; }
+.menu-backdrop { display: none; }
+
+/* Cards, dashboard and sections */
+.page-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px; }
+.card { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--paper); box-shadow: var(--shadow); }
+.stat-card { min-height: 128px; }
+.stat-label { color: var(--muted); font-size: 12px; }
+.stat-value { margin-top: 10px; font-size: 27px; font-weight: 800; letter-spacing: -0.6px; }
+.small-title { max-width: 100%; overflow-wrap: anywhere; font-size: 19px; line-height: 1.3; }
+.stat-icon { float: right; padding: 9px; border-radius: 10px; background: #eaf8f4; color: var(--primary); }
+.section { margin-top: 27px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.section-head h3, .rundown-intro h3 { margin: 0; font-size: 16px; }
+.section-kicker { margin-bottom: 4px; font-size: 10px; letter-spacing: 1.2px; }
+.section-head .section-kicker { margin-bottom: 3px; }
+.info { padding: 14px; border-radius: 10px; background: #eff9f5; color: #31776b; line-height: 1.65; }
+.info-separator { padding: 0 4px; }
+.table-heading { margin-bottom: 12px; }
+.toolbar-title { margin: 2px 0 0; font-size: 16px; }
+.page-toolbar { justify-content: space-between; }
+.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.toolbar-right { justify-content: flex-end; }
+.search { width: min(360px, 100%); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); -webkit-overflow-scrolling: touch; }
+.table { width: 100%; min-width: 650px; border-collapse: collapse; }
+.table th, .table td { padding: 15px 17px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: middle; }
+.table th { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.table tr:last-child td { border-bottom: 0; }
+.table td b { font-weight: 700; }
+.badge { display: inline-flex; align-items: center; min-height: 25px; padding: 5px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.badge.success { background: #e3f7ee; color: #18845b; }
+.badge.warning { background: #fff1d9; color: #a76b11; }
+.badge.danger { background: #ffe6e4; color: #b44d4d; }
+.badge.neutral { background: #edf1f2; color: #65727b; }
+.actions { display: flex; align-items: center; gap: 12px; }
+.empty { padding: 35px; color: var(--muted); text-align: center; }
+
+/* Rundown */
+.rundown-intro { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.rundown-intro .muted { margin: 5px 0 0; font-size: 13px; }
+.rundown-toolbar { justify-content: flex-end; }
+.file-button { position: relative; overflow: hidden; }
+.file-button input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; }
+.rundown-list { display: grid; gap: 11px; }
+.compact-list { gap: 9px; }
+.rundown-item { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 17px 19px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: var(--shadow); }
+.compact-list .rundown-item { padding: 14px 16px; }
+.rundown-time { align-self: stretch; display: flex; flex-direction: column; justify-content: center; padding-right: 18px; border-right: 1px solid var(--line); }
+.rundown-time span { margin-bottom: 3px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.rundown-time strong { color: var(--primary-dark); font-size: 22px; letter-spacing: -0.5px; }
+.rundown-main { min-width: 0; }
+.rundown-main h4 { margin: 0 0 6px; font-size: 14px; }
+.rundown-meta { display: flex; flex-wrap: wrap; gap: 7px 15px; color: var(--muted); font-size: 12px; }
+.rundown-main p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.rundown-actions { justify-self: end; }
+.readonly-pill { align-self: flex-start; }
+
+/* Dialog */
+dialog { width: min(620px, calc(100% - 30px)); max-height: min(90vh, 720px); overflow: auto; padding: 24px; border: 0; border-radius: 16px; background: #fff; box-shadow: 0 25px 100px rgba(23, 48, 66, .2); }
+dialog::backdrop { background: rgba(16, 35, 45, .42); }
+.dialog-head, .dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-head h3 { margin: 0 0 20px; font-size: 19px; }
+.icon-btn { padding: 0 4px; background: none; color: var(--muted); font-size: 25px; line-height: 1; }
+.icon-btn:hover { color: var(--ink); }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 8px 0 18px; }
+.form-grid .full-span { grid-column: 1 / -1; }
+.form-note { grid-column: 1 / -1; margin: -2px 0 0; padding: 10px 12px; border-radius: 9px; background: #f2faf7; color: #4d716a; font-size: 12px; }
+.readonly-grid { padding-bottom: 0; }
+.dialog-actions { justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* Notifications */
+.toast { position: fixed; z-index: 50; top: 22px; right: 22px; max-width: min(360px, calc(100% - 32px)); padding: 13px 17px; border-radius: 10px; background: var(--ink); color: #fff; opacity: 0; transform: translateY(-8px); pointer-events: none; transition: .25s ease; }
+.toast.show { opacity: 1; transform: none; }
+
+@media (max-width: 1080px) {
+  .main { padding-right: 4%; padding-left: 4%; }
+  .page-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 860px) {
+  .sidebar { width: min(286px, 86vw); padding: 24px 18px; transform: translateX(-105%); transition: transform .22s ease; box-shadow: 18px 0 45px rgba(16, 39, 49, .12); }
+  body.menu-open .sidebar { transform: translateX(0); }
+  .menu-backdrop { position: fixed; z-index: 19; inset: 0; border: 0; background: rgba(16, 35, 45, .38); }
+  body.menu-open .menu-backdrop { display: block; }
+  .logo strong, .profile div:not(.avatar), .nav-item span, .logout span { display: block; }
+  .logo { padding-bottom: 28px; }
+  .profile { padding: 14px 12px; }
+  .main { margin-left: 0; padding-top: 24px; }
+  .menu-toggle { display: inline-grid; place-items: center; flex: 0 0 40px; }
+}
+
+@media (max-width: 600px) {
+  .login-card { padding: 30px 22px; border-radius: 20px; }
+  .login-card h1 { font-size: 26px; }
+  .main { padding: 18px 14px 38px; }
+  .topbar { display: block; margin-bottom: 24px; }
+  .topbar-heading { align-items: flex-start; }
+  .top-actions { margin-top: 15px; }
+  .topbar h2 { font-size: 24px; }
+  .topbar .eyebrow { margin-bottom: 5px; }
+  .top-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .top-actions .btn { flex: 1 1 auto; }
+  .page-grid { grid-template-columns: 1fr; gap: 11px; }
+  .card { padding: 16px; }
+  .stat-card { min-height: 105px; }
+  .stat-value { font-size: 25px; }
+  .section { margin-top: 21px; }
+  .section-head { align-items: flex-start; }
+  .page-toolbar { align-items: stretch; }
+  .page-toolbar > * { width: 100%; }
+  .page-toolbar .btn { width: 100%; }
+  .toolbar-right { align-items: stretch; justify-content: flex-start; }
+  .toolbar-right .status-pill { justify-content: flex-start; }
+  .rundown-intro { display: block; }
+  .rundown-toolbar { display: grid; grid-template-columns: 1fr 1fr; margin-top: 16px; }
+  .rundown-toolbar .btn { width: 100%; padding-right: 10px; padding-left: 10px; }
+  .rundown-toolbar .btn:first-child { grid-column: 1 / -1; }
+  .rundown-item { grid-template-columns: 84px minmax(0, 1fr); gap: 13px; padding: 14px; }
+  .compact-list .rundown-item { padding: 13px 14px; }
+  .rundown-time { padding-right: 12px; }
+  .rundown-time strong { font-size: 19px; }
+  .rundown-meta { display: grid; gap: 3px; }
+  .rundown-actions { grid-column: 2; justify-self: start; padding-top: 8px; }
+  .readonly-pill { margin-top: 12px; }
+  .import-toolbar { align-items: stretch; }
+  .import-toolbar > * { width: 100%; }
+  .table-wrap { overflow: visible; border: 0; background: transparent; }
+  .table { display: block; min-width: 0; }
+  .table thead { display: none; }
+  .table tbody, .table tr { display: block; }
+  .table tr { margin-bottom: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper); box-shadow: var(--shadow); }
+  .table tr:last-child { margin-bottom: 0; }
+  .table td { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 8px 0; border: 0; white-space: normal; text-align: right; }
+  .table td::before { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 700; text-align: left; content: attr(data-label); }
+  .table td:first-child { padding-top: 4px; }
+  .table td:last-child { padding-bottom: 4px; }
+  .table td.actions { justify-content: flex-end; align-items: center; gap: 14px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .table td.actions::before { display: none; }
+  dialog { width: calc(100% - 24px); padding: 19px 16px; }
+  .form-grid { grid-template-columns: 1fr; gap: 13px; }
+  .form-grid .full-span { grid-column: auto; }
+  .dialog-head h3 { margin-bottom: 15px; font-size: 17px; }
+  .dialog-actions { position: sticky; bottom: -19px; margin: 0 -16px -19px; padding: 14px 16px; background: #fff; }
+  .dialog-actions .btn { flex: 1; }
+}
+
+@media (max-width: 380px) {
+  .top-actions .status-pill { width: 100%; justify-content: flex-start; }
+  .rundown-toolbar { grid-template-columns: 1fr; }
+  .rundown-toolbar .btn:first-child { grid-column: auto; }
+  .rundown-item { grid-template-columns: 76px minmax(0, 1fr); }
+}
+</style>
+  <script>
+    /* InfinityFree / free-hosting guard.
+       Free hosting runs a "Browser Security System": when its check has not finished
+       (or its challenge page got cached for an asset), styles.css is answered with an
+       HTML page served as text/html. Browsers then refuse it with
+       "Refused to apply style ... MIME type ('text/html') is not a supported
+       stylesheet MIME type" and the site renders unstyled.
+       This guard detects that, re-fetches the CSS as plain text and inlines it, or
+       reloads once so the security cookie can be set. Remove only if your host
+       always sends correct MIME types. */
+    (function () {
+      var CSS_HREF = 'styles.css?v=3';
+      var MAX_TRIES = 2;
+      var tries = 0;
+
+      function stylesApplied() {
+        var holder = document.getElementById('app-styles');
+        if (!holder) return true;
+        if (String(holder.tagName).toLowerCase() !== 'link') return true; // already replaced/inlined
+        var sheet = holder.sheet;
+        if (!sheet) return false;
+        try { return sheet.cssRules.length > 0; } catch (error) { return true; } // cross-origin sheet
+      }
+
+      function looksLikeCss(text) {
+        var head = String(text || '').slice(0, 800).toLowerCase().trim();
+        if (!head) return false;
+        if (head.charAt(0) === '<') return false;
+        if (head.indexOf('<!doctype') !== -1 || head.indexOf('<html') !== -1) return false;
+        return head.indexOf('{') !== -1;
+      }
+
+      function inlineCss(text) {
+        var style = document.createElement('style');
+        style.setAttribute('data-source', CSS_HREF + ' (inline fallback)');
+        style.textContent = text;
+        document.head.appendChild(style);
+        document.documentElement.setAttribute('data-stylesheet', 'inline-fallback');
+      }
+
+      function reloadOnce() {
+        try {
+          if (sessionStorage.getItem('outingHubStyleReload') === '1') return;
+          sessionStorage.setItem('outingHubStyleReload', '1');
+        } catch (error) { return; }
+        location.reload();
+      }
+
+      function rescue() {
+        if (tries >= MAX_TRIES || stylesApplied()) return;
+        tries += 1;
+        var url = CSS_HREF + '&retry=' + Date.now();
+        fetch(url, { credentials: 'same-origin', cache: 'reload' })
+          .then(function (response) { return response.text(); })
+          .then(function (text) {
+            if (looksLikeCss(text)) { inlineCss(text); return; }
+            reloadOnce();
+          })
+          .catch(function () { /* offline: the inline fallback stays in charge */ });
+      }
+
+      window.addEventListener('load', function () {
+        rescue();
+        setTimeout(rescue, 1500);
+      });
+    })();
+  </script>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <section id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="brand-mark" aria-hidden="true">✦</div>
+      <p class="eyebrow">OUTING HUB</p>
+      <h1>Kelola outing tanpa ribet.</h1>
+      <p class="muted">Masuk sebagai admin untuk mengelola data, atau mode lihat untuk memantau informasi outing.</p>
+      <form id="login-form" class="stack">
+        <label>User ID / Email
+          <input id="login-id" required autocomplete="username" placeholder="admin atau member" />
+        </label>
+        <label>Password
+          <input id="login-password" required type="password" autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button class="btn primary wide" type="submit">Masuk <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="login-note"><b>Info:</b> peserta tidak perlu dibuatkan akun atau password. Untuk upload ke Supabase, gunakan email/password admin Supabase dengan role admin.</div>
+    </div>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="logo"><span aria-hidden="true">✦</span><strong>Outing Hub</strong></div>
+      <div class="profile">
+        <div id="avatar" class="avatar">A</div>
+        <div><b id="profile-name">Admin</b><small id="profile-role">Administrator</small></div>
+      </div>
+      <nav id="navigation" aria-label="Navigasi utama">
+        <button data-page="dashboard" class="nav-item active">⌂ <span>Dashboard</span></button>
+        <button data-page="participants" class="nav-item admin-only">♙ <span>Data Peserta</span></button>
+        <button data-page="outing" class="nav-item">⌖ <span>Data Outing</span></button>
+        <button data-page="rundown" class="nav-item">☷ <span>Rundown</span></button>
+        <button data-page="expenses" class="nav-item admin-only">▣ <span>Pembelian Barang</span></button>
+        <button data-page="consumption" class="nav-item admin-only">◉ <span>Konsumsi</span></button>
+        <button data-page="reports" class="nav-item admin-only">⇩ <span>Reporting & Import</span></button>
+      </nav>
+      <button id="logout" class="logout">↪ <span>Keluar</span></button>
+    </aside>
+    <button id="menu-backdrop" class="menu-backdrop" aria-label="Tutup menu"></button>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-heading">
+          <button id="mobile-menu-toggle" class="menu-toggle" aria-label="Buka menu">☰</button>
+          <div><p class="eyebrow">OVERVIEW</p><h2 id="page-title">Dashboard</h2></div>
+        </div>
+        <div class="top-actions">
+          <span id="connection-status" class="status-pill">Local mode</span>
+          <button id="sync-now" class="btn ghost admin-only">↻ Upload ke Supabase</button>
+          <button id="quick-add" class="btn primary admin-only">+ Tambah data</button>
+        </div>
+      </header>
+      <div id="page-content"></div>
+    </main>
+  </div>
+
+  <dialog id="data-dialog">
+    <form method="dialog" id="data-form">
+      <div class="dialog-head"><h3 id="dialog-title">Tambah Data</h3><button value="cancel" class="icon-btn" aria-label="Tutup">×</button></div>
+      <div id="dialog-fields" class="form-grid"></div>
+      <div class="dialog-actions"><button value="cancel" class="btn ghost">Batal</button><button id="dialog-save" value="default" class="btn primary">Simpan</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script data-source="config.js (inlined)">
+/* ===== config.js (inlined by tools/build-standalone.mjs) ===== */
+try {
+// Optional Supabase configuration. Never put a service_role key here.
+window.OUTING_CONFIG = {
+  SUPABASE_URL: 'https://ncylyddceptiukzzanlm.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jeWx5ZGRjZXB0aXVrenphbmxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTk4MDEsImV4cCI6MjEwNTI3NTgwMX0.qO3JYJ5wM8StlptYr0nforp0GaRoQHDLRuCi6aXPyzw',
+  STORAGE_BUCKET: 'outing-receipts'
+};
+} catch (error) {
+  console.error('config.js failed to load', error);
+}
+</script>
+<script data-source="supabase-sync.js (inlined)">
+/* ===== supabase-sync.js (inlined by tools/build-standalone.mjs) ===== */
+try {
+/* Supabase synchronization layer for the static app. */
+(() => {
+  const config = window.OUTING_CONFIG || {};
+  if (!window.supabase || !config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) return;
+
+  const client = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+  const storageKey = 'outing-hub-v1';
+  const categoriesTable = 'outing_categories';
+  let activeSync = null;
+  let pendingSnapshot = null;
+
+  const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+  const makeId = (value) => {
+    if (isUuid(value)) return value;
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+      const random = Math.random() * 16 | 0;
+      const result = character === 'x' ? random : (random & 0x3 | 0x8);
+      return result.toString(16);
+    });
+  };
+
+  const readLocal = () => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
+  };
+
+  const setStatus = (text, tone = '') => {
+    const status = document.querySelector('#connection-status');
+    if (!status) return;
+    status.textContent = text;
+    status.dataset.tone = tone;
+  };
+
+  const notifyRemoteReady = () => {
+    window.OUTING_REMOTE_READY = true;
+    document.dispatchEvent(new CustomEvent('outing:remote-ready'));
+  };
+
+  function toRemote(data) {
+    const participants = (data.participants || []).map((participant) => ({
+      id: makeId(participant.id),
+      name: participant.name || '',
+      phone: participant.phone || participant.member_id || '',
+      status: participant.status || 'Ikut',
+      payment: participant.payment || 'Belum bayar'
+    }));
+    const rundown = (data.rundown || []).map((item) => ({
+      id: makeId(item.id),
+      schedule_time: item.time || '',
+      activity: item.activity || '',
+      location: item.location || '',
+      pic: item.pic || '',
+      notes: item.notes || ''
+    }));
+    const expenses = (data.expenses || []).map((item) => ({
+      id: makeId(item.id),
+      date: item.date || null,
+      item: item.item || '',
+      category: item.category || '',
+      amount: Number(item.amount || 0),
+      photo_url: item.photo || null
+    }));
+    const consumption = (data.consumption || []).map((item) => ({
+      id: makeId(item.id),
+      date: item.date || null,
+      item: item.item || '',
+      category: item.category || '',
+      amount: Number(item.amount || 0),
+      photo_url: item.photo || null
+    }));
+    const categories = [...new Set((data.categories || []).filter(Boolean).map((name) => String(name).trim()))]
+      .map((name) => ({ name }));
+    const outing = data.outing || {};
+    const remoteOuting = {
+      id: makeId(outing.id),
+      destination: outing.destination || '',
+      outing_date: outing.date || null,
+      description: outing.description || ''
+    };
+
+    return {
+      local: {
+        ...data,
+        outing: { ...outing, id: remoteOuting.id },
+        participants: participants.map(({ id, name, phone, status, payment }) => ({ id, name, phone, status, payment })),
+        rundown: rundown.map(({ id, schedule_time, activity, location, pic, notes }) => ({ id, time: schedule_time, activity, location, pic, notes })),
+        expenses: expenses.map(({ photo_url, ...item }) => ({ ...item, photo: photo_url || '' })),
+        consumption: consumption.map(({ photo_url, ...item }) => ({ ...item, photo: photo_url || '' })),
+        categories: categories.map(({ name }) => name)
+      },
+      participants,
+      rundown,
+      expenses,
+      consumption,
+      categories,
+      outing: remoteOuting
+    };
+  }
+
+  async function syncTable(tableName, rows, conflictColumn = 'id') {
+    if (rows.length) {
+      const { error } = await client.from(tableName).upsert(rows, { onConflict: conflictColumn });
+      if (error) throw new Error(`${tableName} upsert: ${error.message}`);
+    }
+
+    // Upsert alone cannot remove rows deleted in the app. Reconcile the table so
+    // Supabase remains an exact copy of the browser data.
+    const { data: existing, error: readError } = await client.from(tableName).select(conflictColumn);
+    if (readError) throw new Error(`${tableName} read: ${readError.message}`);
+    const keep = new Set(rows.map((row) => String(row[conflictColumn])));
+    const stale = (existing || [])
+      .map((row) => row[conflictColumn])
+      .filter((value) => !keep.has(String(value)));
+    if (stale.length) {
+      const { error } = await client.from(tableName).delete().in(conflictColumn, stale);
+      if (error) throw new Error(`${tableName} delete: ${error.message}`);
+    }
+  }
+
+  async function syncSnapshot(snapshot) {
+    const remote = toRemote(snapshot);
+    setStatus('☁ Menyimpan...', 'syncing');
+
+    try {
+      await Promise.all([
+        syncTable('participants', remote.participants),
+        syncTable('rundown', remote.rundown),
+        syncTable('expenses', remote.expenses),
+        syncTable('consumption', remote.consumption),
+        syncTable(categoriesTable, remote.categories, 'name'),
+        syncTable('outing', [remote.outing])
+      ]);
+
+      // Keep generated UUIDs locally so later edits update the same remote rows.
+      localStorage.setItem(storageKey, JSON.stringify(remote.local));
+      setStatus('☁ Supabase', 'connected');
+      return { ok: true };
+    } catch (error) {
+      console.error('Supabase sync failed:', error);
+      setStatus('⚠ Gagal sinkronisasi', 'error');
+      return { ok: false, error };
+    }
+  }
+
+  async function flushQueue() {
+    let result = { ok: true };
+    while (pendingSnapshot) {
+      const snapshot = pendingSnapshot;
+      pendingSnapshot = null;
+      result = await syncSnapshot(snapshot);
+    }
+    return result;
+  }
+
+  function queueSync(snapshot) {
+    pendingSnapshot = JSON.parse(JSON.stringify(snapshot));
+    if (!activeSync) {
+      activeSync = flushQueue().finally(() => {
+        activeSync = null;
+      });
+    }
+    return activeSync;
+  }
+
+  const mapParticipant = (participant) => ({
+    id: participant.id,
+    name: participant.name || '',
+    phone: participant.phone || participant.member_id || '',
+    status: participant.status || 'Ikut',
+    payment: participant.payment || 'Belum bayar'
+  });
+  const mapRundown = (item) => ({
+    id: item.id,
+    time: item.schedule_time || item.time || '',
+    activity: item.activity || '',
+    location: item.location || '',
+    pic: item.pic || '',
+    notes: item.notes || ''
+  });
+  const mapLedger = (item) => ({
+    id: item.id,
+    date: item.date || '',
+    item: item.item || '',
+    category: item.category || '',
+    amount: Number(item.amount || 0),
+    photo: item.photo_url || ''
+  });
+
+  async function loadRemote() {
+    setStatus('☁ Memuat...', 'syncing');
+    try {
+      const [participants, outing, rundown, expenses, consumption, categories] = await Promise.all([
+        client.from('participants').select('*').order('created_at'),
+        client.from('outing').select('*').order('created_at').limit(1),
+        client.from('rundown').select('*').order('schedule_time'),
+        client.from('expenses').select('*').order('date'),
+        client.from('consumption').select('*').order('date'),
+        client.from(categoriesTable).select('name').order('name')
+      ]);
+      const failed = [participants, outing, rundown, expenses, consumption, categories].find((result) => result.error);
+      if (failed) throw new Error(failed.error.message);
+
+      const hasRemote = participants.data?.length || outing.data?.length || rundown.data?.length || expenses.data?.length || consumption.data?.length || categories.data?.length;
+      if (!hasRemote) {
+        const result = await queueSync(readLocal());
+        if (!result.ok) throw result.error;
+        notifyRemoteReady();
+        return;
+      }
+
+      const current = readLocal();
+      const remote = {
+        participants: (participants.data || []).map(mapParticipant),
+        outing: outing.data?.[0]
+          ? {
+              id: outing.data[0].id,
+              destination: outing.data[0].destination || '',
+              date: outing.data[0].outing_date || '',
+              description: outing.data[0].description || ''
+            }
+          : current.outing,
+        rundown: (rundown.data || []).map(mapRundown),
+        expenses: (expenses.data || []).map(mapLedger),
+        consumption: (consumption.data || []).map(mapLedger),
+        categories: categories.data?.length
+          ? categories.data.map((item) => item.name).filter(Boolean)
+          : (current.categories || [])
+      };
+      localStorage.setItem(storageKey, JSON.stringify(remote));
+      setStatus('☁ Supabase', 'connected');
+      notifyRemoteReady();
+    } catch (error) {
+      console.error('Supabase load failed:', error);
+      setStatus('⚠ Gagal sinkronisasi', 'error');
+      window.OUTING_SYNC_ERROR = error;
+    }
+  }
+
+  // app.js calls this after every local create, edit, delete, and import.
+  window.OUTING_SYNC = {
+    client,
+    queue: queueSync,
+    load: loadRemote
+  };
+  window.OUTING_SYNC_READY = loadRemote();
+})();
+} catch (error) {
+  console.error('supabase-sync.js failed to load', error);
+}
+</script>
+<script data-source="app.js (inlined)">
+/* ===== app.js (inlined by tools/build-standalone.mjs) ===== */
+try {
+const APP_STORAGE_KEY = 'outing-hub-v1';
+const DEFAULT_ADMIN = { userId: 'admin', password: 'power88' };
+const DEFAULT_MEMBER = { userId: 'member', password: 'member' };
+const PARTICIPANT_STATUSES = ['Ikut', 'Batal ikut', 'Tidak ikut'];
+const PAYMENT_STATUSES = ['Belum bayar', 'Bayar sebagian', 'Sudah bayar'];
+const ADMIN_PAGES = ['participants', 'expenses', 'consumption', 'reports'];
+const ADDABLE_PAGES = ['participants', 'rundown', 'expenses', 'consumption'];
+
+const DEFAULT_DB = {
+  participants: [
+    { id: 'p1', name: 'Budi Santoso', phone: '0812-3456-7890', status: 'Ikut', payment: 'Sudah bayar' },
+    { id: 'p2', name: 'Siti Aminah', phone: '0813-2222-3344', status: 'Ikut', payment: 'Bayar sebagian' },
+    { id: 'p3', name: 'Andi Wijaya', phone: '0821-9876-5432', status: 'Batal ikut', payment: 'Belum bayar' }
+  ],
+  outing: {
+    destination: 'Bandung, Jawa Barat',
+    date: '2026-10-18',
+    description: 'Outing tahunan tim internal dengan agenda edukasi dan liburan.'
+  },
+  rundown: [
+    { id: 'r1', time: '07:00', activity: 'Berkumpul dan registrasi', location: 'Kantor pusat', pic: 'Panitia', notes: 'Peserta hadir 15 menit sebelum berangkat.' },
+    { id: 'r2', time: '08:00', activity: 'Perjalanan menuju Bandung', location: 'Bus outing', pic: 'Koordinator transportasi', notes: '' },
+    { id: 'r3', time: '10:30', activity: 'Kunjungan dan aktivitas utama', location: 'Lokasi tujuan', pic: 'Tim acara', notes: '' },
+    { id: 'r4', time: '16:00', activity: 'Perjalanan pulang', location: 'Bandung', pic: 'Koordinator transportasi', notes: '' }
+  ],
+  expenses: [
+    { id: 'e1', date: '2026-10-05', item: 'Transportasi bus', category: 'Transportasi', amount: 2500000, photo: '' },
+    { id: 'e2', date: '2026-10-05', item: 'Perlengkapan acara', category: 'Perlengkapan', amount: 1500000, photo: '' }
+  ],
+  consumption: [
+    { id: 'c1', date: '2026-10-06', item: 'Nasi box', category: 'Makanan', amount: 980000, photo: '' },
+    { id: 'c2', date: '2026-10-06', item: 'Air mineral', category: 'Minuman', amount: 320000, photo: '' }
+  ],
+  categories: ['Transportasi', 'Perlengkapan', 'ATK', 'Makanan', 'Minuman', 'Lainnya']
+};
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+let db = loadDb();
+let session = null;
+let currentPage = 'dashboard';
+let editingId = null;
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function createId(prefix = 'item') {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normaliseParticipant(item = {}, index = 0) {
+  const status = PARTICIPANT_STATUSES.includes(item.status) ? item.status : 'Ikut';
+  const payment = PAYMENT_STATUSES.includes(item.payment) ? item.payment : 'Belum bayar';
+  // member_id is accepted only as a one-time migration fallback for older local data.
+  const phone = item.phone || item.telephone || item.nomor_telepon || item.member_id || '';
+  return {
+    id: item.id || `p-${index + 1}`,
+    name: String(item.name || '').trim(),
+    phone: String(phone).trim(),
+    status,
+    payment
+  };
+}
+
+function normaliseRundown(item = {}, index = 0) {
+  return {
+    id: item.id || `r-${index + 1}`,
+    time: String(item.time || item.waktu || '').trim(),
+    activity: String(item.activity || item.agenda || item.kegiatan || '').trim(),
+    location: String(item.location || item.lokasi || '').trim(),
+    pic: String(item.pic || item.person_in_charge || item.penanggung_jawab || '').trim(),
+    notes: String(item.notes || item.catatan || '').trim()
+  };
+}
+
+function normaliseLedgerItem(item = {}, index = 0, prefix = 'item') {
+  return {
+    id: item.id || `${prefix}-${index + 1}`,
+    date: String(item.date || '').trim(),
+    item: String(item.item || '').trim(),
+    category: String(item.category || '').trim(),
+    amount: Number(item.amount || 0),
+    photo: item.photo || item.photo_url || ''
+  };
+}
+
+function normaliseDatabase(source = {}) {
+  const outing = source.outing || {};
+  return {
+    participants: Array.isArray(source.participants)
+      ? source.participants.map(normaliseParticipant)
+      : clone(DEFAULT_DB.participants),
+    outing: {
+      id: outing.id || '',
+      destination: String(outing.destination || '').trim(),
+      date: String(outing.date || outing.outing_date || '').trim(),
+      description: String(outing.description || '').trim()
+    },
+    rundown: Array.isArray(source.rundown)
+      ? source.rundown.map(normaliseRundown)
+      : clone(DEFAULT_DB.rundown),
+    expenses: Array.isArray(source.expenses)
+      ? source.expenses.map((item, index) => normaliseLedgerItem(item, index, 'e'))
+      : clone(DEFAULT_DB.expenses),
+    consumption: Array.isArray(source.consumption)
+      ? source.consumption.map((item, index) => normaliseLedgerItem(item, index, 'c'))
+      : clone(DEFAULT_DB.consumption),
+    categories: Array.isArray(source.categories) && source.categories.length
+      ? source.categories.filter(Boolean)
+      : clone(DEFAULT_DB.categories)
+  };
+}
+
+function loadDb() {
+  try {
+    const raw = localStorage.getItem(APP_STORAGE_KEY);
+    if (!raw) return clone(DEFAULT_DB);
+    return normaliseDatabase(JSON.parse(raw));
+  } catch {
+    return clone(DEFAULT_DB);
+  }
+}
+
+function saveDb() {
+  localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(db));
+  if (window.OUTING_SYNC?.queue) return window.OUTING_SYNC.queue(db);
+  return Promise.resolve({ ok: true, localOnly: true });
+}
+
+function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.') {
+  if (result?.ok && !result.localOnly) {
+    showToast(successMessage);
+  } else if (result?.ok) {
+    showToast('Data tersimpan di browser. Supabase belum dikonfigurasi.');
+  } else {
+    showToast('Data tersimpan lokal, tetapi belum masuk ke Supabase. Cek koneksi atau RLS.');
+  }
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[char]));
+}
+
+function formatMoney(value) {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0
+  }).format(number);
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  }).format(date);
+}
+
+function statusBadge(value) {
+  const label = String(value || '-');
+  let type = 'neutral';
+  if (/batal|sebagian/i.test(label)) type = 'warning';
+  if (/tidak ikut|belum bayar/i.test(label)) type = 'danger';
+  if (/^ikut$|sudah bayar/i.test(label)) type = 'success';
+  return `<span class="badge ${type}">${escapeHtml(label)}</span>`;
+}
+
+function isAdmin() {
+  return session?.role === 'admin';
+}
+
+function getLoggedUserName() {
+  if (!session) return 'Guest';
+  return session.role === 'admin' ? 'Administrator' : session.name;
+}
+
+function sortedRundown() {
+  return [...(db.rundown || [])].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+}
+
+function login(event) {
+  event.preventDefault();
+  const userId = $('#login-id').value.trim();
+  const password = $('#login-password').value;
+
+  if (userId === DEFAULT_ADMIN.userId && password === DEFAULT_ADMIN.password) {
+    session = { role: 'admin', name: 'Administrator' };
+    startApp();
+    return;
+  }
+
+  // A viewer uses one shared read-only login; participants no longer need accounts.
+  if (userId === DEFAULT_MEMBER.userId && password === DEFAULT_MEMBER.password) {
+    session = { role: 'member', name: 'Peserta' };
+    startApp();
+    return;
+  }
+
+  const config = window.OUTING_CONFIG || {};
+  if (config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase) {
+    const authClient = window.OUTING_SYNC?.client || window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+    authClient.auth.signInWithPassword({ email: userId, password })
+      .then(({ data, error }) => {
+        if (!error && data?.user) {
+          const role = data.user.app_metadata?.role;
+          if (role !== 'admin') {
+            authClient.auth.signOut();
+            showToast('Akun Supabase ini belum memiliki role admin.');
+            return;
+          }
+          session = { role: 'admin', name: data.user.email || 'Admin Supabase' };
+          startApp();
+          // Re-read Supabase using the authenticated session before the next input.
+          window.OUTING_SYNC?.load?.();
+          return;
+        }
+        showToast('User ID atau password tidak sesuai.');
+      })
+      .catch(() => showToast('Login gagal. Cek konfigurasi Supabase Anda.'));
+    return;
+  }
+
+  showToast('User ID atau password tidak sesuai.');
+}
+
+function startApp() {
+  $('#login-screen').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#profile-name').textContent = getLoggedUserName();
+  $('#profile-role').textContent = isAdmin() ? 'Administrator' : 'Mode lihat';
+  $('#avatar').textContent = isAdmin() ? 'A' : 'P';
+  closeMobileMenu();
+  render();
+}
+
+function render() {
+  if (!isAdmin() && ADMIN_PAGES.includes(currentPage)) currentPage = 'dashboard';
+
+  const titles = {
+    dashboard: 'Dashboard',
+    participants: 'Data Peserta',
+    outing: 'Data Outing',
+    rundown: 'Rundown',
+    expenses: 'Pembelian Barang',
+    consumption: 'Konsumsi',
+    reports: 'Reporting & Import'
+  };
+
+  $('#page-title').textContent = titles[currentPage] || 'Dashboard';
+  $$('.nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.page === currentPage);
+    if (item.classList.contains('admin-only')) item.classList.toggle('hidden', !isAdmin());
+  });
+  $$('.admin-only').forEach((item) => {
+    if (!item.closest('#navigation')) item.classList.toggle('hidden', !isAdmin());
+  });
+
+  const handlers = {
+    dashboard: renderDashboard,
+    participants: renderParticipants,
+    outing: renderOuting,
+    rundown: renderRundown,
+    expenses: renderExpenses,
+    consumption: renderConsumption,
+    reports: renderReports
+  };
+
+  $('#page-content').innerHTML = (handlers[currentPage] || renderDashboard)();
+
+  // Content inserted after the navigation also needs the permission state applied.
+  if (!isAdmin()) $$('.admin-only').forEach((item) => item.classList.add('hidden'));
+  const quickAdd = $('#quick-add');
+  if (quickAdd) quickAdd.classList.toggle('hidden', !isAdmin() || (currentPage !== 'dashboard' && !ADDABLE_PAGES.includes(currentPage)));
+}
+
+function renderDashboard() {
+  const participants = db.participants || [];
+  const totalParticipants = participants.length;
+  const attending = participants.filter((participant) => participant.status === 'Ikut').length;
+  const paid = participants.filter((participant) => participant.payment === 'Sudah bayar').length;
+  const scheduleCount = (db.rundown || []).length;
+  const upcoming = sortedRundown().slice(0, 4);
+
+  return `
+    <div class="page-grid">
+      <div class="card stat-card">
+        <span class="stat-icon">♙</span>
+        <span class="stat-label">Total peserta</span>
+        <div class="stat-value">${totalParticipants}</div>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-icon">✓</span>
+        <span class="stat-label">Peserta ikut</span>
+        <div class="stat-value">${attending}</div>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-icon">◷</span>
+        <span class="stat-label">Sudah bayar</span>
+        <div class="stat-value">${paid}</div>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-icon">☷</span>
+        <span class="stat-label">Agenda rundown</span>
+        <div class="stat-value">${scheduleCount}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">INFORMASI UTAMA</p>
+          <h3>Ringkasan outing</h3>
+        </div>
+        <button class="link-btn" data-action="go-outing">Lihat detail <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="card">
+        <div class="info">
+          <b>${escapeHtml(db.outing.destination || 'Tujuan belum diatur')}</b>
+          <span class="info-separator">·</span>
+          ${escapeHtml(formatDate(db.outing.date))}<br>
+          ${escapeHtml(db.outing.description || 'Tambahkan informasi outing untuk memulai.')}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">JADWAL</p>
+          <h3>Rundown outing</h3>
+        </div>
+        <button class="link-btn" data-action="go-rundown">Lihat semua <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="rundown-list compact-list">
+        ${upcoming.length ? upcoming.map((item) => renderRundownCard(item, false)).join('') : '<div class="empty card">Belum ada rundown.</div>'}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">KEIKUTSERTAAN</p>
+          <h3>Status peserta</h3>
+        </div>
+      </div>
+      <div class="table-wrap">
+        ${renderParticipantTable(participants.slice(0, 6), isAdmin())}
+      </div>
+    </div>
+  `;
+}
+
+function renderParticipants() {
+  return `
+    <div class="toolbar page-toolbar">
+      <input id="participant-search" class="search" placeholder="Cari nama atau nomor telepon..." aria-label="Cari peserta" />
+      <button class="btn primary" data-add="participants">+ Tambah peserta</button>
+    </div>
+    <div class="section">
+      <div class="section-head table-heading">
+        <div>
+          <p class="section-kicker">DAFTAR PESERTA</p>
+          <h3>Nama, nomor telepon, dan status</h3>
+        </div>
+        <span class="status-pill">${db.participants.length} peserta</span>
+      </div>
+      <div class="table-wrap" id="participant-table">
+        ${renderParticipantTable(db.participants, true)}
+      </div>
+    </div>
+  `;
+}
+
+function renderParticipantTable(rows, showActions = false) {
+  if (!rows.length) return '<div class="empty">Belum ada data peserta.</div>';
+
+  const rowsHtml = rows.map((participant) => `
+    <tr>
+      <td data-label="Nama"><b>${escapeHtml(participant.name || '-')}</b></td>
+      <td data-label="Nomor telepon">${escapeHtml(participant.phone || '-')}</td>
+      <td data-label="Status peserta">${statusBadge(participant.status)}</td>
+      <td data-label="Status pembayaran">${statusBadge(participant.payment)}</td>
+      ${showActions && isAdmin() ? `
+        <td data-label="Aksi" class="actions">
+          <button class="link-btn" data-edit="${escapeHtml(participant.id)}" data-type="participants">Edit</button>
+          <button class="link-btn danger-link" data-delete="${escapeHtml(participant.id)}" data-type="participants">Hapus</button>
+        </td>
+      ` : ''}
+    </tr>
+  `).join('');
+
+  return `
+    <table class="table participant-table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Nomor telepon</th>
+          <th>Status peserta</th>
+          <th>Status pembayaran</th>
+          ${showActions && isAdmin() ? '<th>Aksi</th>' : ''}
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+}
+
+function renderOuting() {
+  const outing = db.outing || { destination: '', date: '', description: '' };
+  return `
+    <div class="card outing-card">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">DETAIL KEGIATAN</p>
+          <h3>Informasi tujuan outing</h3>
+        </div>
+        ${isAdmin() ? '<button class="btn primary" data-edit="outing" data-type="outing">Edit outing</button>' : ''}
+      </div>
+      <div class="form-grid readonly-grid">
+        <label>Tujuan
+          <input disabled value="${escapeHtml(outing.destination || '')}" />
+        </label>
+        <label>Tanggal
+          <input disabled type="date" value="${escapeHtml(outing.date || '')}" />
+        </label>
+        <label class="full-span">Catatan
+          <textarea disabled>${escapeHtml(outing.description || '')}</textarea>
+        </label>
+      </div>
+    </div>
+    <div class="section">
+      <div class="info">${isAdmin() ? 'Perbarui tujuan dan tanggal outing agar informasi di dashboard dan rundown tetap sinkron.' : `Halo ${escapeHtml(session?.name || 'Peserta')}, halaman ini dapat dilihat tanpa akses untuk mengubah data.`}</div>
+    </div>
+  `;
+}
+
+function renderRundown() {
+  const rows = sortedRundown();
+  return `
+    <div class="rundown-intro card">
+      <div>
+        <p class="section-kicker">JADWAL KEGIATAN</p>
+        <h3>Rundown outing</h3>
+        <p class="muted">Lihat urutan agenda, lokasi, dan penanggung jawab kegiatan.</p>
+      </div>
+      ${isAdmin() ? `
+        <div class="toolbar rundown-toolbar">
+          <button class="btn primary" data-add="rundown">+ Tambah agenda</button>
+          <label class="btn ghost file-button">Import Excel
+            <input id="rundown-import-file" type="file" accept=".xlsx,.xls,.csv" />
+          </label>
+          <button class="btn ghost" data-template-type="rundown">Template</button>
+        </div>
+      ` : '<span class="status-pill readonly-pill">Mode lihat</span>'}
+    </div>
+    <div class="section">
+      <div class="rundown-list">
+        ${rows.length ? rows.map((item) => renderRundownCard(item, isAdmin())).join('') : '<div class="empty card">Belum ada agenda rundown.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderRundownCard(item, showActions = false) {
+  return `
+    <article class="rundown-item">
+      <div class="rundown-time">
+        <span>WAKTU</span>
+        <strong>${escapeHtml(item.time || '--:--')}</strong>
+      </div>
+      <div class="rundown-main">
+        <h4>${escapeHtml(item.activity || 'Agenda belum diisi')}</h4>
+        <div class="rundown-meta">
+          ${item.location ? `<span>⌖ ${escapeHtml(item.location)}</span>` : ''}
+          ${item.pic ? `<span>♙ ${escapeHtml(item.pic)}</span>` : ''}
+        </div>
+        ${item.notes ? `<p>${escapeHtml(item.notes)}</p>` : ''}
+      </div>
+      ${showActions && isAdmin() ? `
+        <div class="actions rundown-actions">
+          <button class="link-btn" data-edit="${escapeHtml(item.id)}" data-type="rundown">Edit</button>
+          <button class="link-btn danger-link" data-delete="${escapeHtml(item.id)}" data-type="rundown">Hapus</button>
+        </div>
+      ` : ''}
+    </article>
+  `;
+}
+
+function renderLedger(type, title) {
+  const rows = db[type] || [];
+  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  return `
+    <div class="page-toolbar toolbar">
+      <div>
+        <p class="section-kicker">${escapeHtml(title).toUpperCase()}</p>
+        <h3 class="toolbar-title">${escapeHtml(rows.length)} data tersimpan</h3>
+      </div>
+      <div class="toolbar toolbar-right">
+        <span class="status-pill">Total ${formatMoney(total)}</span>
+        <button class="btn primary" data-add="${type}">+ Tambah data</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="table-wrap">
+        ${rows.length ? `
+          <table class="table ledger-table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Item</th>
+                <th>Kategori</th>
+                <th>Jumlah</th>
+                <th>Foto</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((item) => `
+                <tr>
+                  <td data-label="Tanggal">${escapeHtml(formatDate(item.date))}</td>
+                  <td data-label="Item"><b>${escapeHtml(item.item || '-')}</b></td>
+                  <td data-label="Kategori">${escapeHtml(item.category || '-')}</td>
+                  <td data-label="Jumlah">${formatMoney(item.amount)}</td>
+                  <td data-label="Foto">${item.photo ? '<span class="badge success">Ada foto</span>' : '-'}</td>
+                  <td data-label="Aksi" class="actions">
+                    <button class="link-btn" data-edit="${escapeHtml(item.id)}" data-type="${type}">Edit</button>
+                    <button class="link-btn danger-link" data-delete="${escapeHtml(item.id)}" data-type="${type}">Hapus</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty">Belum ada data.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderExpenses() {
+  return renderLedger('expenses', 'Pembelian barang');
+}
+
+function renderConsumption() {
+  return renderLedger('consumption', 'Konsumsi');
+}
+
+function renderReports() {
+  const allData = [
+    ...db.expenses.map((item) => ({ ...item, type: 'Pembelian' })),
+    ...db.consumption.map((item) => ({ ...item, type: 'Konsumsi' }))
+  ];
+  const totalCost = allData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  return `
+    <div class="page-grid">
+      <div class="card stat-card"><span class="stat-label">Peserta</span><div class="stat-value">${db.participants.length}</div></div>
+      <div class="card stat-card"><span class="stat-label">Agenda rundown</span><div class="stat-value">${db.rundown.length}</div></div>
+      <div class="card stat-card"><span class="stat-label">Pembelian</span><div class="stat-value">${db.expenses.length}</div></div>
+      <div class="card stat-card"><span class="stat-label">Total biaya</span><div class="stat-value small-title">${formatMoney(totalCost)}</div></div>
+    </div>
+
+    <div class="section card">
+      <div class="section-head">
+        <div><p class="section-kicker">FILE</p><h3>Export reporting</h3></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" data-export="excel">Export Excel</button>
+        <button class="btn ghost" data-export="pdf">Export PDF</button>
+        <button class="btn ghost" data-export="word">Export Word</button>
+      </div>
+      <p class="muted">File dibuat dan diunduh lokal dari browser.</p>
+    </div>
+
+    <div class="section card">
+      <div class="section-head">
+        <div><p class="section-kicker">DATA MASUK</p><h3>Import data dari Excel</h3></div>
+      </div>
+      <div class="toolbar import-toolbar">
+        <select id="import-type" aria-label="Jenis data yang diimport">
+          <option value="participants">Peserta</option>
+          <option value="rundown">Rundown</option>
+          <option value="expenses">Pembelian Barang</option>
+          <option value="consumption">Konsumsi</option>
+        </select>
+        <input id="import-file" type="file" accept=".xlsx,.xls,.csv" aria-label="Pilih file Excel" />
+        <button class="btn ghost" data-template="true">Download Template</button>
+      </div>
+      <p class="muted">Untuk rundown, gunakan kolom waktu, agenda, lokasi, PIC, dan catatan. Import hanya tersedia untuk admin.</p>
+    </div>
+  `;
+}
+
+function formFields(type, item = {}) {
+  if (type === 'outing') {
+    return `
+      <label>Tujuan
+        <input name="destination" required value="${escapeHtml(item.destination || '')}" />
+      </label>
+      <label>Tanggal
+        <input name="date" type="date" required value="${escapeHtml(item.date || '')}" />
+      </label>
+      <label class="full-span">Catatan
+        <textarea name="description">${escapeHtml(item.description || '')}</textarea>
+      </label>
+    `;
+  }
+
+  if (type === 'participants') {
+    return `
+      <label>Nama lengkap
+        <input name="name" required autocomplete="name" value="${escapeHtml(item.name || '')}" />
+      </label>
+      <label>Nomor telepon
+        <input name="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="08xxxxxxxxxx" value="${escapeHtml(item.phone || '')}" />
+      </label>
+      <label>Status peserta
+        <select name="status">
+          ${PARTICIPANT_STATUSES.map((option) => `<option value="${option}" ${item.status === option ? 'selected' : ''}>${option}</option>`).join('')}
+        </select>
+      </label>
+      <label>Status pembayaran
+        <select name="payment">
+          ${PAYMENT_STATUSES.map((option) => `<option value="${option}" ${item.payment === option ? 'selected' : ''}>${option}</option>`).join('')}
+        </select>
+      </label>
+      <p class="form-note full-span">Peserta tidak perlu dibuatkan akun atau password. Data ini hanya digunakan untuk daftar outing.</p>
+    `;
+  }
+
+  if (type === 'rundown') {
+    return `
+      <label>Waktu
+        <input name="time" type="time" required value="${escapeHtml(item.time || '')}" />
+      </label>
+      <label>Agenda / kegiatan
+        <input name="activity" required value="${escapeHtml(item.activity || '')}" />
+      </label>
+      <label>Lokasi
+        <input name="location" value="${escapeHtml(item.location || '')}" />
+      </label>
+      <label>PIC / penanggung jawab
+        <input name="pic" value="${escapeHtml(item.pic || '')}" />
+      </label>
+      <label class="full-span">Catatan
+        <textarea name="notes" placeholder="Catatan tambahan untuk agenda ini">${escapeHtml(item.notes || '')}</textarea>
+      </label>
+    `;
+  }
+
+  return `
+    <label>Tanggal
+      <input name="date" type="date" required value="${escapeHtml(item.date || new Date().toISOString().slice(0, 10))}" />
+    </label>
+    <label>Nama item / menu
+      <input name="item" required value="${escapeHtml(item.item || '')}" />
+    </label>
+    <label>Kategori
+      <input name="category" list="category-list" required value="${escapeHtml(item.category || '')}" />
+      <datalist id="category-list">
+        ${(db.categories || DEFAULT_DB.categories).map((category) => `<option value="${escapeHtml(category)}"></option>`).join('')}
+      </datalist>
+    </label>
+    <label>Jumlah (Rp)
+      <input name="amount" type="number" min="0" required value="${escapeHtml(item.amount || 0)}" />
+    </label>
+    <label class="full-span">Foto bukti
+      <input name="photo" type="file" accept="image/*" />
+      <small class="muted">Foto akan dikompres otomatis sebelum disimpan.</small>
+    </label>
+  `;
+}
+
+function openDialog(type, id = null) {
+  if (!isAdmin()) {
+    showToast('Hanya admin yang dapat mengubah data.');
+    return;
+  }
+
+  editingId = id;
+  const item = id
+    ? (type === 'outing' ? db.outing : (db[type] || []).find((row) => row.id === id)) || {}
+    : {};
+  const titlePrefix = id ? 'Edit' : 'Tambah';
+  const label = {
+    participants: 'Peserta',
+    rundown: 'Rundown',
+    expenses: 'Pembelian Barang',
+    consumption: 'Konsumsi',
+    outing: 'Outing'
+  }[type] || 'Data';
+
+  $('#dialog-title').textContent = `${titlePrefix} ${label}`;
+  $('#data-dialog').dataset.type = type;
+  $('#dialog-fields').innerHTML = formFields(type, item);
+  $('#data-dialog').showModal();
+}
+
+function compressImage(file) {
+  return new Promise((resolve) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return resolve('');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const maxSize = 1280;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      image.onerror = () => resolve('');
+      image.src = reader.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFormSubmit(event) {
+  if (event.submitter?.value === 'cancel') {
+    event.preventDefault();
+    closeDialog();
+    return;
+  }
+  event.preventDefault();
+  if (!isAdmin()) {
+    closeDialog();
+    showToast('Hanya admin yang dapat menyimpan perubahan.');
+    return;
+  }
+
+  const type = $('#data-dialog').dataset.type;
+  const formData = new FormData(event.target);
+  const values = Object.fromEntries(formData.entries());
+
+  if (type === 'outing') {
+    db.outing = {
+      destination: values.destination.trim(),
+      date: values.date,
+      description: (values.description || '').trim()
+    };
+    const syncResult = await saveDb();
+    closeDialog();
+    render();
+    showSyncResult(syncResult, 'Data outing berhasil disimpan ke Supabase.');
+    return;
+  }
+
+  if (type === 'participants') {
+    const existing = db.participants.find((participant) => participant.id === editingId);
+    const participant = normaliseParticipant({
+      id: editingId || createId('p'),
+      name: values.name,
+      phone: values.phone,
+      status: values.status,
+      payment: values.payment
+    });
+
+    if (existing) Object.assign(existing, participant);
+    else db.participants.push(participant);
+  } else if (type === 'rundown') {
+    const agenda = normaliseRundown({
+      id: editingId || createId('r'),
+      time: values.time,
+      activity: values.activity,
+      location: values.location,
+      pic: values.pic,
+      notes: values.notes
+    });
+    const index = db.rundown.findIndex((row) => row.id === editingId);
+    if (index >= 0) db.rundown[index] = agenda;
+    else db.rundown.push(agenda);
+  } else {
+    const current = (db[type] || []).find((row) => row.id === editingId);
+    const photoInput = formData.get('photo');
+    const photo = photoInput instanceof File && photoInput.size
+      ? await compressImage(photoInput)
+      : (current?.photo || '');
+    const category = (values.category || '').trim();
+    if (category && !db.categories.includes(category)) db.categories.push(category);
+    const ledgerItem = normaliseLedgerItem({
+      id: editingId || createId(type === 'expenses' ? 'e' : 'c'),
+      date: values.date,
+      item: values.item,
+      category,
+      amount: Number(values.amount || 0),
+      photo
+    });
+    const list = db[type] || [];
+    const index = list.findIndex((row) => row.id === editingId);
+    if (index >= 0) list[index] = ledgerItem;
+    else list.push(ledgerItem);
+    db[type] = list;
+  }
+
+  const syncResult = await saveDb();
+  closeDialog();
+  render();
+  showSyncResult(syncResult);
+}
+
+function closeDialog() {
+  const dialog = $('#data-dialog');
+  if (dialog?.open) dialog.close();
+  $('#data-form')?.reset();
+  editingId = null;
+}
+
+async function deleteData(type, id) {
+  if (!isAdmin()) {
+    showToast('Hanya admin yang dapat menghapus data.');
+    return;
+  }
+  if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) return;
+
+  if (type === 'participants') db.participants = db.participants.filter((item) => item.id !== id);
+  else db[type] = (db[type] || []).filter((item) => item.id !== id);
+  const syncResult = await saveDb();
+  render();
+  showSyncResult(syncResult, 'Data berhasil dihapus dari Supabase.');
+}
+
+function exportReport(kind) {
+  if (!isAdmin()) {
+    showToast('Hanya admin yang dapat export data.');
+    return;
+  }
+  const allData = [
+    ...db.expenses.map((item) => ({ ...item, type: 'Pembelian' })),
+    ...db.consumption.map((item) => ({ ...item, type: 'Konsumsi' }))
+  ];
+
+  if (kind === 'excel') {
+    if (!window.XLSX) return showToast('Library Excel belum tersedia.');
+    const workbook = XLSX.utils.book_new();
+    const appendSheet = (name, rows) => {
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(workbook, sheet, name);
+    };
+    appendSheet('Ringkasan', [{
+      Tujuan: db.outing.destination || '',
+      Tanggal: db.outing.date || '',
+      Deskripsi: db.outing.description || ''
+    }]);
+    appendSheet('Peserta', db.participants.map((item) => ({
+      Nama: item.name,
+      'Nomor Telepon': item.phone,
+      Status: item.status,
+      'Status Pembayaran': item.payment
+    })));
+    appendSheet('Rundown', sortedRundown().map((item) => ({
+      Waktu: item.time,
+      Agenda: item.activity,
+      Lokasi: item.location,
+      PIC: item.pic,
+      Catatan: item.notes
+    })));
+    appendSheet('Biaya', allData.map((item) => ({
+      Tipe: item.type,
+      Tanggal: item.date,
+      Item: item.item,
+      Kategori: item.category,
+      Jumlah: item.amount
+    })));
+    XLSX.writeFile(workbook, 'report-outing.xlsx');
+    return;
+  }
+
+  if (kind === 'pdf') {
+    if (!window.jspdf) return showToast('Library PDF belum tersedia.');
+    const { jsPDF } = window.jspdf;
+    const documentPdf = new jsPDF();
+    documentPdf.setFontSize(16);
+    documentPdf.text('Report Outing', 14, 18);
+    documentPdf.setFontSize(11);
+    documentPdf.text(`Tujuan: ${db.outing.destination || '-'}`, 14, 28);
+    documentPdf.text(`Tanggal: ${formatDate(db.outing.date)}`, 14, 35);
+    let y = 48;
+    allData.forEach((item, index) => {
+      if (y > 280) {
+        documentPdf.addPage();
+        y = 18;
+      }
+      documentPdf.text(`${index + 1}. ${item.type} - ${item.item} - ${item.category} - ${formatMoney(item.amount)}`, 14, y);
+      y += 8;
+    });
+    documentPdf.save('report-outing.pdf');
+    return;
+  }
+
+  const html = `
+    <html><body>
+      <h1>Report Outing</h1>
+      <p>Tujuan: ${escapeHtml(db.outing.destination || '')}</p>
+      <table border="1" cellpadding="6" cellspacing="0">
+        <tr><th>Type</th><th>Item</th><th>Kategori</th><th>Tanggal</th><th>Jumlah</th></tr>
+        ${allData.map((item) => `<tr><td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.item)}</td><td>${escapeHtml(item.category)}</td><td>${escapeHtml(item.date)}</td><td>${escapeHtml(formatMoney(item.amount))}</td></tr>`).join('')}
+      </table>
+    </body></html>
+  `;
+  const blob = new Blob([html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'report-outing.doc';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTemplate(typeOverride = null) {
+  if (!isAdmin()) {
+    showToast('Hanya admin yang dapat mengunduh template.');
+    return;
+  }
+  if (!window.XLSX) return showToast('Library Excel belum tersedia.');
+  const type = typeOverride || $('#import-type')?.value || 'participants';
+  const templates = {
+    participants: {
+      headers: ['name', 'phone', 'status', 'payment'],
+      sample: ['Contoh Nama', '081234567890', 'Ikut', 'Belum bayar']
+    },
+    rundown: {
+      headers: ['time', 'activity', 'location', 'pic', 'notes'],
+      sample: ['08:00', 'Contoh agenda', 'Lokasi kegiatan', 'Panitia', 'Catatan agenda']
+    },
+    expenses: {
+      headers: ['date', 'item', 'category', 'amount'],
+      sample: ['2026-10-08', 'Contoh item', 'Perlengkapan', '250000']
+    },
+    consumption: {
+      headers: ['date', 'item', 'category', 'amount'],
+      sample: ['2026-10-08', 'Contoh menu', 'Makanan', '150000']
+    }
+  };
+  const template = templates[type] || templates.participants;
+  const sheet = XLSX.utils.aoa_to_sheet([template.headers, template.sample]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, type);
+  XLSX.writeFile(workbook, `template-${type}.xlsx`);
+}
+
+function getImportValue(row, keys) {
+  const entries = Object.entries(row || {});
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== '') return row[key];
+    const target = key.toLowerCase().replace(/[\s_.-]/g, '');
+    const found = entries.find(([name, value]) => name.toLowerCase().replace(/[\s_.-]/g, '') === target && value !== '');
+    if (found) return found[1];
+  }
+  return '';
+}
+
+function importExcelFile(file, type) {
+  if (!isAdmin()) {
+    showToast('Hanya admin yang dapat import data.');
+    return;
+  }
+  if (!file) return;
+  if (!window.XLSX) {
+    showToast('Library Excel belum tersedia.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const workbook = XLSX.read(event.target.result, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) {
+        showToast('File Excel kosong.');
+        return;
+      }
+
+      let imported = 0;
+      if (type === 'participants') {
+        rows.forEach((row) => {
+          const participant = normaliseParticipant({
+            id: createId('p'),
+            name: getImportValue(row, ['name', 'Nama', 'nama']),
+            phone: getImportValue(row, ['phone', 'nomor_telepon', 'Nomor Telepon', 'telepon', 'No Telepon', 'No. Telp', 'Nomor HP', 'member_id']),
+            status: getImportValue(row, ['status', 'Status']) || 'Ikut',
+            payment: getImportValue(row, ['payment', 'Status Pembayaran', 'status_pembayaran']) || 'Belum bayar'
+          });
+          if (participant.name && participant.phone) {
+            if (!PARTICIPANT_STATUSES.includes(participant.status)) participant.status = 'Ikut';
+            if (!PAYMENT_STATUSES.includes(participant.payment)) participant.payment = 'Belum bayar';
+            db.participants.push(participant);
+            imported += 1;
+          }
+        });
+      } else if (type === 'rundown') {
+        rows.forEach((row) => {
+          const agenda = normaliseRundown({
+            id: createId('r'),
+            time: getImportValue(row, ['time', 'Waktu', 'waktu']),
+            activity: getImportValue(row, ['activity', 'agenda', 'Agenda', 'kegiatan', 'Kegiatan']),
+            location: getImportValue(row, ['location', 'Lokasi', 'lokasi']),
+            pic: getImportValue(row, ['pic', 'PIC', 'person_in_charge', 'Penanggung Jawab']),
+            notes: getImportValue(row, ['notes', 'Catatan', 'catatan'])
+          });
+          if (agenda.time && agenda.activity) {
+            db.rundown.push(agenda);
+            imported += 1;
+          }
+        });
+      } else {
+        rows.forEach((row) => {
+          const item = normaliseLedgerItem({
+            id: createId(type === 'expenses' ? 'e' : 'c'),
+            date: getImportValue(row, ['date', 'Tanggal', 'tanggal']),
+            item: getImportValue(row, ['item', 'Item', 'Nama', 'menu']),
+            category: getImportValue(row, ['category', 'Kategori', 'kategori']),
+            amount: Number(getImportValue(row, ['amount', 'Jumlah', 'jumlah']) || 0),
+            photo: ''
+          });
+          if (item.date && item.item && item.category) {
+            if (!db.categories.includes(item.category)) db.categories.push(item.category);
+            db[type].push(item);
+            imported += 1;
+          }
+        });
+      }
+
+      const syncResult = await saveDb();
+      render();
+      showSyncResult(syncResult, `${imported} dari ${rows.length} data berhasil diimport ke Supabase.`);
+    } catch (error) {
+      console.error(error);
+      showToast('Format file tidak valid. Cek template Excel Anda.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function closeMobileMenu() {
+  document.body.classList.remove('menu-open');
+}
+
+function applyRemoteData() {
+  db = loadDb();
+  if (session) render();
+}
+
+document.addEventListener('outing:remote-ready', applyRemoteData);
+if (window.OUTING_REMOTE_READY) applyRemoteData();
+if (window.OUTING_SYNC_READY) window.OUTING_SYNC_READY.then(applyRemoteData);
+
+const loginForm = $('#login-form');
+if (loginForm) loginForm.addEventListener('submit', login);
+
+$('#logout')?.addEventListener('click', () => {
+  window.OUTING_SYNC?.client?.auth.signOut();
+  session = null;
+  currentPage = 'dashboard';
+  closeMobileMenu();
+  $('#app').classList.add('hidden');
+  $('#login-screen').classList.remove('hidden');
+  $('#login-form').reset();
+});
+
+$('#navigation')?.addEventListener('click', (event) => {
+  const item = event.target.closest('[data-page]');
+  if (!item) return;
+  const page = item.dataset.page;
+  if (ADMIN_PAGES.includes(page) && !isAdmin()) {
+    showToast('Halaman ini hanya dapat diakses admin.');
+    return;
+  }
+  currentPage = page;
+  render();
+  closeMobileMenu();
+});
+
+$('#mobile-menu-toggle')?.addEventListener('click', () => {
+  document.body.classList.toggle('menu-open');
+});
+$('#menu-backdrop')?.addEventListener('click', closeMobileMenu);
+
+$('#quick-add')?.addEventListener('click', () => {
+  if (!isAdmin()) return showToast('Hanya admin yang dapat menambah data.');
+  const type = ADDABLE_PAGES.includes(currentPage) ? currentPage : 'participants';
+  openDialog(type);
+});
+
+$('#sync-now')?.addEventListener('click', async () => {
+  if (!isAdmin()) return showToast('Hanya admin yang dapat upload data.');
+  if (!window.OUTING_SYNC?.queue) {
+    showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+    return;
+  }
+  const button = $('#sync-now');
+  button.disabled = true;
+  button.textContent = '⟳ Mengupload...';
+  const result = await window.OUTING_SYNC.queue(db);
+  button.disabled = false;
+  button.textContent = '↻ Upload ke Supabase';
+  showSyncResult(result, 'Semua data berhasil diupload ke Supabase.');
+});
+
+$('#data-form')?.addEventListener('submit', handleFormSubmit);
+$('#data-dialog')?.addEventListener('click', (event) => {
+  if (event.target === $('#data-dialog') && event.target.open) closeDialog();
+});
+
+// Buttons inside dynamically rendered pages use delegated events.
+document.addEventListener('click', (event) => {
+  const addButton = event.target.closest('[data-add]');
+  if (addButton) openDialog(addButton.dataset.add);
+
+  const editButton = event.target.closest('[data-edit]');
+  if (editButton) openDialog(editButton.dataset.type, editButton.dataset.edit);
+
+  const deleteButton = event.target.closest('[data-delete]');
+  if (deleteButton) deleteData(deleteButton.dataset.type, deleteButton.dataset.delete);
+
+  const exportButton = event.target.closest('[data-export]');
+  if (exportButton) exportReport(exportButton.dataset.export);
+
+  const templateButton = event.target.closest('[data-template]');
+  if (templateButton) downloadTemplate();
+
+  const templateTypeButton = event.target.closest('[data-template-type]');
+  if (templateTypeButton) downloadTemplate(templateTypeButton.dataset.templateType);
+
+  if (event.target.closest('[data-action="go-outing"]')) {
+    currentPage = 'outing';
+    render();
+  }
+  if (event.target.closest('[data-action="go-rundown"]')) {
+    currentPage = 'rundown';
+    render();
+  }
+});
+
+document.addEventListener('input', (event) => {
+  if (event.target.id !== 'participant-search') return;
+  const term = event.target.value.toLowerCase().trim();
+  const filtered = db.participants.filter((participant) => `${participant.name} ${participant.phone}`.toLowerCase().includes(term));
+  const table = $('#participant-table');
+  if (table) table.innerHTML = renderParticipantTable(filtered, true);
+});
+
+document.addEventListener('change', (event) => {
+  if (event.target.id === 'import-file' && event.target.files[0]) {
+    importExcelFile(event.target.files[0], $('#import-type')?.value || 'participants');
+    event.target.value = '';
+  }
+  if (event.target.id === 'rundown-import-file' && event.target.files[0]) {
+    importExcelFile(event.target.files[0], 'rundown');
+    event.target.value = '';
+  }
+});
+
+// config.js normally defines this. Keep a safe fallback without replacing its values.
+window.OUTING_CONFIG = window.OUTING_CONFIG || {
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: '',
+  STORAGE_BUCKET: 'outing-receipts'
+};
+
+if ($('#login-form')) $('#login-form').reset();
+} catch (error) {
+  console.error('app.js failed to load', error);
+}
+</script>
+</body>
+</html>

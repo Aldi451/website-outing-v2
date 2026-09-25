@@ -23,14 +23,37 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Semua perubahan dat
 - Export laporan Excel, PDF, dan Word langsung ke komputer.
 - Import XLSX/CSV serta download template Excel untuk peserta, rundown, pembelian, dan konsumsi.
 - Tampilan responsif dengan menu mobile dan daftar data yang lebih mudah dibaca di layar kecil.
+- CSS fallback inline + guard anti-MIME di `index.html`, sehingga halaman tetap tampil rapi di hosting gratisan yang kadang mengirim file CSS sebagai `text/html`.
 - Data demo tersimpan di `localStorage` browser, sehingga ringan dan langsung digunakan.
 
 ## Upload ke InfinityFree
 
-1. Upload `index.html`, `styles.css`, `app.js`, `config.js`, dan `supabase-sync.js` ke folder `htdocs`.
+1. Upload `index.html`, `styles.css`, `app.js`, `config.js`, `supabase-sync.js`, dan `.htaccess` ke folder `htdocs` (langsung di dalam `htdocs`, tanpa sub-folder).
 2. Pastikan nama file dan huruf besar/kecil sama persis.
 3. Buka domain Anda.
 4. Gunakan login di atas.
+
+Jika CSS tampak tidak terbaca (tampilan polos, berbeda dari GitHub), lihat
+[`TROUBLESHOOTING-INFINITYFREE.md`](TROUBLESHOOTING-INFINITYFREE.md). Penyebab paling umum
+adalah Browser Security System InfinityFree yang menjawab permintaan `styles.css` dengan
+halaman HTML (`Content-Type: text/html`), sehingga browser menolak memakainya sebagai CSS.
+`index.html` sekarang sudah punya fallback otomatis untuk kasus itu.
+
+### Alternatif: satu file standalone
+
+`outing-hub-standalone.html` adalah versi seluruh aplikasi dalam satu file (CSS + semua
+JavaScript di-*inline*), sehingga tidak ada request CSS/JS terpisah yang bisa rusak karena
+MIME atau cache hosting. Upload file itu ke `htdocs` dan buka
+`https://domainanda/outing-hub-standalone.html`.
+
+Buat ulang setelah mengubah kode:
+
+```bash
+node tools/build-standalone.mjs
+```
+
+`index.html` tetap menjadi sumber utama; file standalone dihasilkan otomatis dari file yang
+sama.
 
 Library Excel dan PDF dimuat dari CDN. Jika jaringan CDN diblokir, login dan CRUD lokal tetap bisa digunakan, tetapi fitur export/import membutuhkan koneksi CDN.
 

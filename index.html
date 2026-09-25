@@ -8,7 +8,94 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* First-paint fallback only. styles.css is still the source of truth.
+       Without this, a hosting hiccup on styles.css leaves the page raw/unstyled. */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f6f8f9; color: #18232d; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
+    .hidden { display: none !important; }
+    .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: #f5faf9; }
+    .login-card { width: min(440px, 100%); padding: 40px; border-radius: 24px; background: #fff; box-shadow: 0 25px 70px rgba(20, 59, 53, 0.09); }
+    .login-card h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.2; }
+    .eyebrow { margin: 0 0 8px; color: #0e9f9a; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
+    .muted { color: #71808e; line-height: 1.6; }
+    .stack { display: grid; gap: 16px; margin: 24px 0 18px; }
+    .login-note { padding: 12px 14px; border-radius: 10px; background: #f2faf7; color: #4d716a; font-size: 12px; }
+    label { display: grid; gap: 8px; font-weight: 700; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { width: 100%; min-width: 0; border: 1px solid #e5ecee; border-radius: 10px; padding: 12px 13px; background: #fff; color: #18232d; }
+    .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    .btn.primary { background: #0e9f9a; color: #fff; }
+    .wide { width: 100%; display: flex; justify-content: space-between; }
+  </style>
+  <link id="app-styles" rel="stylesheet" href="styles.css?v=3" />
+  <script>
+    /* InfinityFree / free-hosting guard.
+       Free hosting runs a "Browser Security System": when its check has not finished
+       (or its challenge page got cached for an asset), styles.css is answered with an
+       HTML page served as text/html. Browsers then refuse it with
+       "Refused to apply style ... MIME type ('text/html') is not a supported
+       stylesheet MIME type" and the site renders unstyled.
+       This guard detects that, re-fetches the CSS as plain text and inlines it, or
+       reloads once so the security cookie can be set. Remove only if your host
+       always sends correct MIME types. */
+    (function () {
+      var CSS_HREF = 'styles.css?v=3';
+      var MAX_TRIES = 2;
+      var tries = 0;
+
+      function stylesApplied() {
+        var holder = document.getElementById('app-styles');
+        if (!holder) return true;
+        if (String(holder.tagName).toLowerCase() !== 'link') return true; // already replaced/inlined
+        var sheet = holder.sheet;
+        if (!sheet) return false;
+        try { return sheet.cssRules.length > 0; } catch (error) { return true; } // cross-origin sheet
+      }
+
+      function looksLikeCss(text) {
+        var head = String(text || '').slice(0, 800).toLowerCase().trim();
+        if (!head) return false;
+        if (head.charAt(0) === '<') return false;
+        if (head.indexOf('<!doctype') !== -1 || head.indexOf('<html') !== -1) return false;
+        return head.indexOf('{') !== -1;
+      }
+
+      function inlineCss(text) {
+        var style = document.createElement('style');
+        style.setAttribute('data-source', CSS_HREF + ' (inline fallback)');
+        style.textContent = text;
+        document.head.appendChild(style);
+        document.documentElement.setAttribute('data-stylesheet', 'inline-fallback');
+      }
+
+      function reloadOnce() {
+        try {
+          if (sessionStorage.getItem('outingHubStyleReload') === '1') return;
+          sessionStorage.setItem('outingHubStyleReload', '1');
+        } catch (error) { return; }
+        location.reload();
+      }
+
+      function rescue() {
+        if (tries >= MAX_TRIES || stylesApplied()) return;
+        tries += 1;
+        var url = CSS_HREF + '&retry=' + Date.now();
+        fetch(url, { credentials: 'same-origin', cache: 'reload' })
+          .then(function (response) { return response.text(); })
+          .then(function (text) {
+            if (looksLikeCss(text)) { inlineCss(text); return; }
+            reloadOnce();
+          })
+          .catch(function () { /* offline: the inline fallback stays in charge */ });
+      }
+
+      window.addEventListener('load', function () {
+        rescue();
+        setTimeout(rescue, 1500);
+      });
+    })();
+  </script>
 </head>
 <body>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -79,8 +166,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js"></script>
-  <script src="supabase-sync.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=3"></script>
+  <script src="supabase-sync.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
