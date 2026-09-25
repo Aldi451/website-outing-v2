@@ -130,13 +130,31 @@ function saveDb() {
   return Promise.resolve({ ok: true, localOnly: true });
 }
 
+/**
+ * Turns a sync result into a message that names the failing table and the most
+ * likely cause, instead of a generic "cek koneksi atau RLS".
+ */
+function syncFailureMessage(result) {
+  const hint = result?.hint ? ` ${result.hint}` : '';
+  const tables = result?.failedTables || [];
+  if (result?.localOnlyLogin) {
+    return `Data hanya tersimpan lokal: ${tables.length || 'semua'} tabel ditolak Supabase karena login masih mode lokal. Masuk dengan email & password admin Supabase, lalu cek lewat tombol 🩺 Cek Supabase.`;
+  }
+  if (tables.length) {
+    return `Gagal kirim ke Supabase pada tabel: ${tables.join(', ')}.${hint}`;
+  }
+  return `Data tersimpan lokal, tetapi belum masuk ke Supabase.${hint || ' Cek koneksi atau policy RLS.'}`;
+}
+
 function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.') {
   if (result?.ok && !result.localOnly) {
     showToast(successMessage);
   } else if (result?.ok) {
     showToast('Data tersimpan di browser. Supabase belum dikonfigurasi.');
   } else {
-    showToast('Data tersimpan lokal, tetapi belum masuk ke Supabase. Cek koneksi atau RLS.');
+    if (result?.error) console.error('Sinkronisasi Supabase gagal:', result.error);
+    if (result?.results) console.table(result.results.map(({ table, ok, label, message }) => ({ table, ok, label, message })));
+    showToast(syncFailureMessage(result));
   }
 }
 
@@ -220,7 +238,14 @@ function login(event) {
   }
 
   const config = window.OUTING_CONFIG || {};
-  if (config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase) {
+  const supabaseConfigured = Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY);
+
+  if (supabaseConfigured && !window.supabase) {
+    showToast('Library Supabase belum termuat. Cek koneksi ke CDN lalu muat ulang halaman.');
+    return;
+  }
+
+  if (supabaseConfigured) {
     const authClient = window.OUTING_SYNC?.client || window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
     authClient.auth.signInWithPassword({ email: userId, password })
       .then(({ data, error }) => {
@@ -228,7 +253,7 @@ function login(event) {
           const role = data.user.app_metadata?.role;
           if (role !== 'admin') {
             authClient.auth.signOut();
-            showToast('Akun Supabase ini belum memiliki role admin.');
+            showToast('Akun Supabase ini belum memiliki role admin (app_metadata.role = "admin").');
             return;
           }
           session = { role: 'admin', name: data.user.email || 'Admin Supabase' };
@@ -237,9 +262,13 @@ function login(event) {
           window.OUTING_SYNC?.load?.();
           return;
         }
-        showToast('User ID atau password tidak sesuai.');
+        if (/invalid login credentials/i.test(error?.message || '')) {
+          showToast('Email/password Supabase tidak sesuai. Login lokal admin/power88 hanya menyimpan data di browser.');
+          return;
+        }
+        showToast(`Login Supabase gagal: ${error?.message || 'penyebab tidak diketahui'}.`);
       })
-      .catch(() => showToast('Login gagal. Cek konfigurasi Supabase Anda.'));
+      .catch((error) => showToast(`Login Supabase gagal: ${error?.message || 'cek config.js'} - pastikan URL dan anon key benar.`));
     return;
   }
 
@@ -715,8 +744,51 @@ function openDialog(type, id = null) {
 
   $('#dialog-title').textContent = `${titlePrefix} ${label}`;
   $('#data-dialog').dataset.type = type;
+  $('#dialog-save').classList.remove('hidden');
   $('#dialog-fields').innerHTML = formFields(type, item);
   $('#data-dialog').showModal();
+}
+
+/** Read-only dialog used by the Supabase diagnosis report. */
+function openReportDialog(title, html) {
+  $('#dialog-title').textContent = title;
+  $('#data-dialog').dataset.type = 'report';
+  $('#dialog-save').classList.add('hidden');
+  $('#dialog-fields').innerHTML = html;
+  $('#data-dialog').showModal();
+}
+
+function renderDiagnoseReport(report) {
+  const statusRow = (ok) => (ok === 'ok'
+    ? '<span class="tag ok">OK</span>'
+    : ok === 'gagal' ? '<span class="tag bad">Gagal</span>' : '<span class="tag">Belum diuji</span>');
+
+  const rows = report.tables.map((table) => `
+    <tr>
+      <td><b>${escapeHtml(table.table)}</b><br><small class="muted">lokal: ${table.localRows} baris</small></td>
+      <td>${statusRow(table.read)}<br><small class="muted">${escapeHtml(table.readDetail)}</small></td>
+      <td>${statusRow(table.write)}<br><small class="muted">${escapeHtml(table.writeDetail)}</small></td>
+    </tr>`).join('');
+
+  const sessionText = report.session.active
+    ? `Session Supabase aktif sebagai <b>${escapeHtml(report.session.email)}</b> (role: ${escapeHtml(report.session.role || 'tidak ada')})`
+    : 'Belum ada session Supabase: login yang dipakai masih mode lokal (admin/power88), jadi Supabase hanya mengizinkan baca dan menolak tulis.';
+
+  const conclusion = report.ok
+    ? '<p class="report-note ok"><b>Semua tabel bisa dibaca dan ditulis.</b> Data sudah tersimpan di Supabase.</p>'
+    : `<p class="report-note bad"><b>Ada ${report.problems.length} tabel bermasalah.</b>${report.localOnlyLogin ? ' Penyebab paling mungkin: login masih mode lokal tanpa session Supabase.' : ''}</p>
+       ${report.hint ? `<p class="report-note">Langkah berikutnya: ${escapeHtml(report.hint)}</p>` : ''}`;
+
+  return `
+    <div class="report">
+      ${conclusion}
+      <p class="muted"><b>Project:</b> ${escapeHtml(report.url)}<br>${sessionText}</p>
+      <table class="diagnose-table">
+        <thead><tr><th>Tabel</th><th>Baca dari Supabase</th><th>Kirim ke Supabase</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="muted">Detail lengkap tiap tabel juga dicetak di tab Console browser.</p>
+    </div>`;
 }
 
 function compressImage(file) {
@@ -1109,6 +1181,36 @@ $('#quick-add')?.addEventListener('click', () => {
   if (!isAdmin()) return showToast('Hanya admin yang dapat menambah data.');
   const type = ADDABLE_PAGES.includes(currentPage) ? currentPage : 'participants';
   openDialog(type);
+});
+
+$('#sync-diagnose')?.addEventListener('click', async () => {
+  if (!isAdmin()) return showToast('Hanya admin yang dapat memeriksa Supabase.');
+  if (!window.OUTING_SYNC?.diagnose) {
+    const detail = window.OUTING_SYNC_ERROR?.message ? ` (${window.OUTING_SYNC_ERROR.message})` : '';
+    return showToast(`Supabase belum terhubung${detail}. Cek config.js dan koneksi ke CDN.`);
+  }
+
+  const button = $('#sync-diagnose');
+  button.disabled = true;
+  button.textContent = '🩺 Memeriksa...';
+  try {
+    const report = await window.OUTING_SYNC.diagnose(db);
+    console.table(report.tables.map(({ table, read, remoteRows, write, readDetail, writeDetail }) => ({
+      table, read, remoteRows, write, readDetail, writeDetail
+    })));
+    openReportDialog('Diagnosa Supabase', renderDiagnoseReport(report));
+    if (report.ok) {
+      showToast('Supabase terhubung. Semua tabel dapat dibaca dan ditulis.');
+    } else {
+      showToast(`Ditemukan masalah di ${report.problems.length} tabel. Lihat detailnya di jendela diagnosa.`);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast('Diagnosa gagal dijalankan. Lihat Console browser.');
+  } finally {
+    button.disabled = false;
+    button.textContent = '🩺 Cek Supabase';
+  }
 });
 
 $('#sync-now')?.addEventListener('click', async () => {

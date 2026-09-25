@@ -1,14 +1,45 @@
-/* Supabase synchronization layer for the static app. */
+/* Supabase synchronization layer for the static app.
+ *
+ * Designed to work with a real Supabase project and to explain *why* a write
+ * failed instead of silently keeping everything in the browser:
+ * - waits for the Supabase CDN library instead of giving up immediately
+ * - syncs every table independently, so one broken table does not block the rest
+ * - normalises dates/amounts before upsert (NOT NULL and invalid date are the
+ *   most common causes of "data only saved locally")
+ * - maps RLS / missing table / legacy column errors to an actionable hint
+ * - exposes diagnose() for the "Cek Supabase" button in the UI
+ */
 (() => {
   const config = window.OUTING_CONFIG || {};
-  if (!window.supabase || !config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) return;
-
-  const client = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
   const storageKey = 'outing-hub-v1';
   const categoriesTable = 'outing_categories';
+  const TABLES = ['participants', 'rundown', 'expenses', 'consumption', categoriesTable, 'outing'];
+  const LIBRARY_WAIT_MS = 15000;
+
+  const statusEl = () => document.querySelector('#connection-status');
+  const setStatus = (text, tone = '') => {
+    const status = statusEl();
+    if (!status) return;
+    status.textContent = text;
+    status.dataset.tone = tone;
+    status.title = window.OUTING_SYNC_STATUS_TEXT || '';
+  };
+
+  const readLocal = () => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
+  };
+
+  if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+    setStatus('Local mode');
+    window.OUTING_SYNC_STATUS = { configured: false, libraryLoaded: false, ready: false };
+    return;
+  }
+
+  let client = null;
   let activeSync = null;
   let pendingSnapshot = null;
 
+  // ---------------------------------------------------------------- utilities
   const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
   const makeId = (value) => {
     if (isUuid(value)) return value;
@@ -20,68 +51,159 @@
     });
   };
 
-  const readLocal = () => {
-    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
+  const text = (value) => String(value ?? '').trim();
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+
+  const MONTHS = {
+    jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mar: 3, maret: 3, march: 3,
+    apr: 4, april: 4, mei: 5, may: 5, jun: 6, juni: 6, june: 6, jul: 7, juli: 7, july: 7,
+    agu: 8, agt: 8, agustus: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9, okt: 10,
+    oktober: 10, oct: 10, october: 10, nov: 11, november: 11, des: 12, desember: 12, dec: 12, december: 12
   };
 
-  const setStatus = (text, tone = '') => {
-    const status = document.querySelector('#connection-status');
-    if (!status) return;
-    status.textContent = text;
-    status.dataset.tone = tone;
+  const pad = (value) => String(value).padStart(2, '0');
+  const isoFromParts = (year, month, day) => {
+    const y = Number(year);
+    const m = Number(month);
+    const d = Number(day);
+    if (!y || !m || !d || m > 12 || d > 31) return '';
+    const date = new Date(Date.UTC(y, m - 1, d));
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
   };
 
-  const notifyRemoteReady = () => {
-    window.OUTING_REMOTE_READY = true;
-    document.dispatchEvent(new CustomEvent('outing:remote-ready'));
-  };
+  /**
+   * Accepts what spreadsheets and <input type="date"> actually produce:
+   * Date objects, Excel serial numbers, ISO strings, dd/mm/yyyy, and
+   * "5 Mei 2026" / "5 May 2026". Returns "" when nothing usable is found.
+   */
+  function toIsoDate(value) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      // Excel serial date (day 1 = 1900-01-01, with the usual leap-year bug).
+      const excelEpoch = Date.UTC(1899, 11, 30);
+      return new Date(excelEpoch + Math.round(value) * 86400000).toISOString().slice(0, 10);
+    }
+    const raw = text(value);
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
 
+    const numeric = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+    if (numeric) {
+      const [, first, second, year] = numeric;
+      const fullYear = year.length === 2 ? `20${year}` : year;
+      // Indonesian users write dd/mm/yyyy; fall back to mm/dd/yyyy when impossible.
+      const dayFirst = isoFromParts(fullYear, second, first);
+      const monthFirst = isoFromParts(fullYear, first, second);
+      return dayFirst || monthFirst;
+    }
+
+    const named = raw.toLowerCase().match(/^(\d{1,2})[\s-]*([a-z]{3,9})[\s,-]*(\d{4})$/);
+    if (named && MONTHS[named[2]]) return isoFromParts(named[3], MONTHS[named[2]], named[1]);
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return '';
+  }
+
+  /** "Rp 1.500.000", "1.500.000", "1500000,50", 1500000 -> number */
+  function toAmount(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    let raw = text(value).replace(/[^\d.,-]/g, '');
+    if (!raw) return 0;
+    const dots = (raw.match(/\./g) || []).length;
+    const commas = (raw.match(/,/g) || []).length;
+    if (dots && commas) raw = raw.replace(/\./g, '').replace(',', '.');
+    else if (commas) raw = raw.replace(',', '.');
+    else if (dots > 1 || /\.\d{3}\b/.test(raw)) raw = raw.replace(/\./g, '');
+    const number = Number(raw);
+    return Number.isFinite(number) ? Math.round(number * 100) / 100 : 0;
+  }
+
+  const PARTICIPANT_STATUS = ['Ikut', 'Batal ikut', 'Tidak ikut'];
+  const PAYMENT_STATUS = ['Belum bayar', 'Bayar sebagian', 'Sudah bayar'];
+
+  // ------------------------------------------------------------ error helpers
+  const RULES = [
+    { match: (error) => error.code === '42P01' || /relation .* does not exist|could not find the table|schema cache/i.test(error.message), hint: 'Tabel belum ada di Supabase -> jalankan supabase-schema.sql di SQL Editor Supabase.', label: 'tabel belum dibuat' },
+    { match: (error) => error.code === '42703' || /column .+ does not exist/i.test(error.message), hint: 'Struktur tabel masih versi lama -> jalankan blok migrasi di supabase-schema.sql.', label: 'kolom schema lama' },
+    { match: (error) => error.code === '42501' || /row-level security/i.test(error.message), hint: 'Ditolak RLS. Login harus memakai email & password user Supabase yang app_metadata-nya {"role":"admin"}, atau aktifkan opsi akses di supabase-schema.sql.', label: 'ditolak RLS/policy' },
+    { match: (error) => error.code === '23502' || /null value in column/i.test(error.message), hint: 'Ada kolom wajib yang kosong (biasanya tanggal) -> isi tanggal di data tersebut.', label: 'kolom wajib kosong' },
+    { match: (error) => error.code === '23514' || /check constraint/i.test(error.message), hint: 'Nilai status/pembayaran tidak sesuai daftar yang diizinkan (Ikut / Batal ikut / Tidak ikut).', label: 'nilai tidak valid' },
+    { match: (error) => error.code === '23505' || /duplicate key/i.test(error.message), hint: 'Ada ID data yang bentrok -> hapus duplikatnya lalu upload lagi.', label: 'ID ganda' },
+    { match: (error) => /invalid input syntax|date\/time field value out of range/i.test(error.message), hint: 'Ada tanggal yang tidak valid pada data -> perbaiki lalu upload lagi.', label: 'tanggal tidak valid' },
+    { match: (error) => error.code === 'PGRST301' || /jwt/i.test(error.message), hint: 'Session login Supabase sudah kedaluwarsa -> masuk ulang lewat form login.', label: 'session kedaluwarsa' },
+    { match: (error) => /invalid api key|no api key|401/i.test(`${error.code || ''} ${error.message}`), hint: 'SUPABASE_URL atau SUPABASE_ANON_KEY di config.js salah/berubah.', label: 'anon key salah' },
+    { match: (error) => /failed to fetch|networkerror|fetch failed|load failed/i.test(error.message), hint: 'Supabase tidak bisa dihubungi (internet terputus atau project Supabase sedang pause).', label: 'koneksi gagal' }
+  ];
+
+  function describeError(error, table) {
+    const normalised = {
+      code: error?.code ? String(error.code) : '',
+      message: text(error?.message || error?.error_description || error?.details || error) || 'kesalahan tidak diketahui'
+    };
+    const rule = RULES.find((item) => item.match(normalised));
+    return {
+      table,
+      code: normalised.code,
+      message: normalised.message,
+      label: rule ? rule.label : 'gagal',
+      hint: rule ? rule.hint : 'Lihat detail lengkap di Console browser.'
+    };
+  }
+
+  // --------------------------------------------------------------- row mapping
   function toRemote(data) {
     const participants = (data.participants || []).map((participant) => ({
       id: makeId(participant.id),
-      name: participant.name || '',
-      phone: participant.phone || participant.member_id || '',
-      status: participant.status || 'Ikut',
-      payment: participant.payment || 'Belum bayar'
+      name: text(participant.name),
+      phone: text(participant.phone ?? participant.member_id),
+      status: PARTICIPANT_STATUS.includes(participant.status) ? participant.status : 'Ikut',
+      payment: PAYMENT_STATUS.includes(participant.payment) ? participant.payment : 'Belum bayar'
     }));
+
     const rundown = (data.rundown || []).map((item) => ({
       id: makeId(item.id),
-      schedule_time: item.time || '',
-      activity: item.activity || '',
-      location: item.location || '',
-      pic: item.pic || '',
-      notes: item.notes || ''
+      schedule_time: text(item.time ?? item.schedule_time),
+      activity: text(item.activity),
+      location: text(item.location),
+      pic: text(item.pic),
+      notes: text(item.notes)
     }));
-    const expenses = (data.expenses || []).map((item) => ({
-      id: makeId(item.id),
-      date: item.date || null,
-      item: item.item || '',
-      category: item.category || '',
-      amount: Number(item.amount || 0),
-      photo_url: item.photo || null
-    }));
-    const consumption = (data.consumption || []).map((item) => ({
-      id: makeId(item.id),
-      date: item.date || null,
-      item: item.item || '',
-      category: item.category || '',
-      amount: Number(item.amount || 0),
-      photo_url: item.photo || null
-    }));
-    const categories = [...new Set((data.categories || []).filter(Boolean).map((name) => String(name).trim()))]
+
+    const ledger = (rows = []) => rows.map((item) => {
+      const date = toIsoDate(item.date);
+      if (!date && text(item.date)) console.warn(`Supabase sync: tanggal "${item.date}" tidak dikenali, memakai tanggal hari ini.`);
+      return {
+        id: makeId(item.id),
+        // date is NOT NULL in the schema, so an empty/invalid value would fail the whole upload.
+        date: date || todayIso(),
+        item: text(item.item),
+        category: text(item.category),
+        amount: toAmount(item.amount),
+        photo_url: item.photo || item.photo_url || null
+      };
+    });
+
+    const expenses = ledger(data.expenses);
+    const consumption = ledger(data.consumption);
+
+    const categories = [...new Set((data.categories || []).filter(Boolean).map((name) => text(name)))]
+      .filter(Boolean)
       .map((name) => ({ name }));
+
     const outing = data.outing || {};
     const remoteOuting = {
       id: makeId(outing.id),
-      destination: outing.destination || '',
-      outing_date: outing.date || null,
-      description: outing.description || ''
+      destination: text(outing.destination),
+      outing_date: toIsoDate(outing.date) || null,
+      description: text(outing.description)
     };
 
     return {
       local: {
         ...data,
-        outing: { ...outing, id: remoteOuting.id },
+        outing: { ...outing, id: remoteOuting.id, date: toIsoDate(outing.date) || '' },
         participants: participants.map(({ id, name, phone, status, payment }) => ({ id, name, phone, status, payment })),
         rundown: rundown.map(({ id, schedule_time, activity, location, pic, notes }) => ({ id, time: schedule_time, activity, location, pic, notes })),
         expenses: expenses.map(({ photo_url, ...item }) => ({ ...item, photo: photo_url || '' })),
@@ -97,23 +219,46 @@
     };
   }
 
-  async function syncTable(tableName, rows, conflictColumn = 'id') {
-    if (rows.length) {
-      const { error } = await client.from(tableName).upsert(rows, { onConflict: conflictColumn });
-      if (error) throw new Error(`${tableName} upsert: ${error.message}`);
+  // ------------------------------------------------------------- sync engine
+  async function sessionInfo() {
+    try {
+      const { data } = await client.auth.getSession();
+      const session = data?.session || null;
+      return {
+        active: Boolean(session),
+        email: session?.user?.email || '',
+        role: session?.user?.app_metadata?.role || ''
+      };
+    } catch {
+      return { active: false, email: '', role: '' };
     }
+  }
 
-    // Upsert alone cannot remove rows deleted in the app. Reconcile the table so
-    // Supabase remains an exact copy of the browser data.
-    const { data: existing, error: readError } = await client.from(tableName).select(conflictColumn);
-    if (readError) throw new Error(`${tableName} read: ${readError.message}`);
-    const keep = new Set(rows.map((row) => String(row[conflictColumn])));
-    const stale = (existing || [])
-      .map((row) => row[conflictColumn])
-      .filter((value) => !keep.has(String(value)));
-    if (stale.length) {
-      const { error } = await client.from(tableName).delete().in(conflictColumn, stale);
-      if (error) throw new Error(`${tableName} delete: ${error.message}`);
+  async function syncTable(tableName, rows, conflictColumn = 'id') {
+    try {
+      if (rows.length) {
+        const { error } = await client.from(tableName).upsert(rows, { onConflict: conflictColumn });
+        if (error) throw error;
+      }
+
+      // Upsert alone cannot remove rows deleted in the app. Reconcile the table so
+      // Supabase remains an exact copy of the browser data.
+      const { data: existing, error: readError } = await client.from(tableName).select(conflictColumn);
+      if (readError) throw readError;
+      const keep = new Set(rows.map((row) => String(row[conflictColumn])));
+      const stale = (existing || [])
+        .map((row) => row[conflictColumn])
+        .filter((value) => !keep.has(String(value)));
+      if (stale.length) {
+        const { error } = await client.from(tableName).delete().in(conflictColumn, stale);
+        if (error) throw error;
+      }
+
+      return { table: tableName, ok: true, rows: rows.length };
+    } catch (error) {
+      const described = describeError(error, tableName);
+      console.error(`Supabase sync failed for table "${tableName}":`, error);
+      return { table: tableName, ok: false, rows: rows.length, error, ...described };
     }
   }
 
@@ -121,29 +266,47 @@
     const remote = toRemote(snapshot);
     setStatus('☁ Menyimpan...', 'syncing');
 
-    try {
-      await Promise.all([
-        syncTable('participants', remote.participants),
-        syncTable('rundown', remote.rundown),
-        syncTable('expenses', remote.expenses),
-        syncTable('consumption', remote.consumption),
-        syncTable(categoriesTable, remote.categories, 'name'),
-        syncTable('outing', [remote.outing])
-      ]);
+    const results = await Promise.all([
+      syncTable('participants', remote.participants),
+      syncTable('rundown', remote.rundown),
+      syncTable('expenses', remote.expenses),
+      syncTable('consumption', remote.consumption),
+      syncTable(categoriesTable, remote.categories, 'name'),
+      syncTable('outing', [remote.outing])
+    ]);
 
+    const failed = results.filter((result) => !result.ok);
+    if (!failed.length) {
       // Keep generated UUIDs locally so later edits update the same remote rows.
       localStorage.setItem(storageKey, JSON.stringify(remote.local));
+      window.OUTING_SYNC_STATUS_TEXT = '';
       setStatus('☁ Supabase', 'connected');
-      return { ok: true };
-    } catch (error) {
-      console.error('Supabase sync failed:', error);
-      setStatus('⚠ Gagal sinkronisasi', 'error');
-      return { ok: false, error };
+      return { ok: true, results, failedTables: [] };
     }
+
+    const session = await sessionInfo();
+    const localOnlyLogin = failed.some((result) => result.code === '42501') && !session.active;
+    window.OUTING_SYNC_STATUS_TEXT = failed.map((result) => `${result.table}: ${result.message}`).join('\n');
+    setStatus(localOnlyLogin ? '⚠ Login lokal (tanpa session)' : '⚠ Gagal sinkronisasi', 'error');
+
+    const error = new Error(failed.map((result) => `${result.table}: ${result.message}`).join(' | '));
+    error.results = results;
+    window.OUTING_SYNC_ERROR = error;
+
+    return {
+      ok: false,
+      error,
+      results,
+      failedTables: failed.map((result) => result.table),
+      hint: failed[0].hint,
+      code: failed[0].code,
+      session,
+      localOnlyLogin
+    };
   }
 
   async function flushQueue() {
-    let result = { ok: true };
+    let result = { ok: true, results: [], failedTables: [] };
     while (pendingSnapshot) {
       const snapshot = pendingSnapshot;
       pendingSnapshot = null;
@@ -164,43 +327,57 @@
 
   const mapParticipant = (participant) => ({
     id: participant.id,
-    name: participant.name || '',
-    phone: participant.phone || participant.member_id || '',
+    name: text(participant.name),
+    phone: text(participant.phone ?? participant.member_id),
     status: participant.status || 'Ikut',
     payment: participant.payment || 'Belum bayar'
   });
   const mapRundown = (item) => ({
     id: item.id,
-    time: item.schedule_time || item.time || '',
-    activity: item.activity || '',
-    location: item.location || '',
-    pic: item.pic || '',
-    notes: item.notes || ''
+    time: text(item.schedule_time ?? item.time),
+    activity: text(item.activity),
+    location: text(item.location),
+    pic: text(item.pic),
+    notes: text(item.notes)
   });
   const mapLedger = (item) => ({
     id: item.id,
-    date: item.date || '',
-    item: item.item || '',
-    category: item.category || '',
-    amount: Number(item.amount || 0),
+    date: toIsoDate(item.date),
+    item: text(item.item),
+    category: text(item.category),
+    amount: toAmount(item.amount),
     photo: item.photo_url || ''
   });
+
+  async function readTable(tableName, orderBy) {
+    let query = client.from(tableName).select('*');
+    if (orderBy) query = query.order(orderBy);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  function notifyRemoteReady() {
+    window.OUTING_REMOTE_READY = true;
+    document.dispatchEvent(new CustomEvent('outing:remote-ready'));
+  }
 
   async function loadRemote() {
     setStatus('☁ Memuat...', 'syncing');
     try {
       const [participants, outing, rundown, expenses, consumption, categories] = await Promise.all([
-        client.from('participants').select('*').order('created_at'),
-        client.from('outing').select('*').order('created_at').limit(1),
-        client.from('rundown').select('*').order('schedule_time'),
-        client.from('expenses').select('*').order('date'),
-        client.from('consumption').select('*').order('date'),
-        client.from(categoriesTable).select('name').order('name')
+        readTable('participants', 'created_at'),
+        client.from('outing').select('*').order('created_at').limit(1).then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        }),
+        readTable('rundown', 'schedule_time'),
+        readTable('expenses', 'date'),
+        readTable('consumption', 'date'),
+        readTable(categoriesTable, 'name')
       ]);
-      const failed = [participants, outing, rundown, expenses, consumption, categories].find((result) => result.error);
-      if (failed) throw new Error(failed.error.message);
 
-      const hasRemote = participants.data?.length || outing.data?.length || rundown.data?.length || expenses.data?.length || consumption.data?.length || categories.data?.length;
+      const hasRemote = participants.length || outing.length || rundown.length || expenses.length || consumption.length || categories.length;
       if (!hasRemote) {
         const result = await queueSync(readLocal());
         if (!result.ok) throw result.error;
@@ -210,37 +387,132 @@
 
       const current = readLocal();
       const remote = {
-        participants: (participants.data || []).map(mapParticipant),
-        outing: outing.data?.[0]
+        participants: participants.map(mapParticipant),
+        outing: outing[0]
           ? {
-              id: outing.data[0].id,
-              destination: outing.data[0].destination || '',
-              date: outing.data[0].outing_date || '',
-              description: outing.data[0].description || ''
+              id: outing[0].id,
+              destination: outing[0].destination || '',
+              date: outing[0].outing_date || '',
+              description: outing[0].description || ''
             }
           : current.outing,
-        rundown: (rundown.data || []).map(mapRundown),
-        expenses: (expenses.data || []).map(mapLedger),
-        consumption: (consumption.data || []).map(mapLedger),
-        categories: categories.data?.length
-          ? categories.data.map((item) => item.name).filter(Boolean)
+        rundown: rundown.map(mapRundown),
+        expenses: expenses.map(mapLedger),
+        consumption: consumption.map(mapLedger),
+        categories: categories.length
+          ? categories.map((item) => item.name).filter(Boolean)
           : (current.categories || [])
       };
       localStorage.setItem(storageKey, JSON.stringify(remote));
+      window.OUTING_SYNC_STATUS_TEXT = '';
       setStatus('☁ Supabase', 'connected');
       notifyRemoteReady();
     } catch (error) {
+      const described = describeError(error, 'baca data');
       console.error('Supabase load failed:', error);
-      setStatus('⚠ Gagal sinkronisasi', 'error');
+      const session = await sessionInfo();
+      const needsLogin = !session.active && ['42501', '401', 'PGRST301'].includes(described.code);
+      window.OUTING_SYNC_STATUS_TEXT = `${described.table}: ${described.message}`;
+      setStatus(needsLogin ? '⚠ Login Supabase diperlukan' : '⚠ Gagal memuat data', 'error');
       window.OUTING_SYNC_ERROR = error;
     }
   }
 
-  // app.js calls this after every local create, edit, delete, and import.
-  window.OUTING_SYNC = {
-    client,
-    queue: queueSync,
-    load: loadRemote
-  };
-  window.OUTING_SYNC_READY = loadRemote();
+  // ---------------------------------------------------------------- diagnosis
+  async function diagnose(localSnapshot) {
+    const session = await sessionInfo();
+    const local = localSnapshot || readLocal();
+    const localCounts = {
+      participants: (local.participants || []).length,
+      rundown: (local.rundown || []).length,
+      expenses: (local.expenses || []).length,
+      consumption: (local.consumption || []).length,
+      [categoriesTable]: (local.categories || []).length,
+      outing: local.outing ? 1 : 0
+    };
+
+    const readResults = {};
+    for (const table of TABLES) {
+      const conflictColumn = table === categoriesTable ? 'name' : 'id';
+      try {
+        const { data, error } = await client.from(table).select(conflictColumn);
+        if (error) throw error;
+        readResults[table] = { ok: true, rows: (data || []).length };
+      } catch (error) {
+        readResults[table] = { ok: false, ...describeError(error, table) };
+      }
+    }
+
+    let upload = null;
+    const hasLocalData = Object.values(localCounts).some((count) => count > 0);
+    if (hasLocalData) upload = await queueSync(local);
+
+    const writeByTable = {};
+    (upload?.results || []).forEach((result) => {
+      writeByTable[result.table] = result.ok
+        ? { ok: true, rows: result.rows }
+        : { ok: false, code: result.code, message: result.message, label: result.label, hint: result.hint };
+    });
+
+    const tables = TABLES.map((table) => {
+      const read = readResults[table];
+      const write = writeByTable[table];
+      return {
+        table,
+        localRows: localCounts[table] ?? 0,
+        read: read.ok ? 'ok' : 'gagal',
+        readDetail: read.ok ? `${read.rows} baris di Supabase` : `${read.label}: ${read.message}`,
+        remoteRows: read.ok ? read.rows : null,
+        write: write ? (write.ok ? 'ok' : 'gagal') : 'belum diuji',
+        writeDetail: write ? (write.ok ? `${write.rows} baris terkirim` : `${write.label}: ${write.message}`) : 'tidak ada data lokal untuk diuji',
+        hint: (write && !write.ok && write.hint) || (!read.ok && read.hint) || ''
+      };
+    });
+
+    const problems = tables.filter((table) => table.read === 'gagal' || table.write === 'gagal');
+    return {
+      ok: problems.length === 0,
+      url: config.SUPABASE_URL,
+      session,
+      tables,
+      problems,
+      localOnlyLogin: problems.some((table) => /RLS|policy/i.test(table.writeDetail) || /RLS|policy/i.test(table.readDetail)) && !session.active,
+      hint: problems.find((table) => table.hint)?.hint || ''
+    };
+  }
+
+  function start() {
+    const ready = loadRemote();
+    window.OUTING_SYNC = {
+      client,
+      queue: queueSync,
+      load: loadRemote,
+      diagnose,
+      tables: TABLES
+    };
+    window.OUTING_SYNC_READY = ready;
+    window.OUTING_SYNC_STATUS = { configured: true, libraryLoaded: true, ready: true };
+    document.dispatchEvent(new CustomEvent('outing:sync-layer-ready'));
+  }
+
+  // The CDN script may still be in flight (or may be replaced by a fallback CDN
+  // from index.html), so wait for it before deciding that Supabase is offline.
+  function waitForLibrary(attempt = 0) {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      client = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+      start();
+      return;
+    }
+    if (attempt * 200 >= LIBRARY_WAIT_MS) {
+      const error = new Error('Library Supabase tidak termuat dari CDN.');
+      console.error('Supabase sync disabled:', error.message);
+      window.OUTING_SYNC_ERROR = error;
+      window.OUTING_SYNC_STATUS = { configured: true, libraryLoaded: false, ready: false };
+      setStatus('⚠ Library Supabase gagal dimuat', 'error');
+      return;
+    }
+    setTimeout(() => waitForLibrary(attempt + 1), 200);
+  }
+
+  waitForLibrary();
 })();
