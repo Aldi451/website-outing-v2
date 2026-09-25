@@ -1,21 +1,34 @@
 # Outing Hub
 
-Website sederhana untuk mengelola outing, peserta, biaya pembelian, konsumsi, dan laporan.
+Website ringan untuk pengelolaan outing yang dapat dijalankan langsung di InfinityFree, GitHub Pages, atau hosting statis lain. Tidak membutuhkan Node.js, database lokal, atau build step.
 
-## Menjalankan
+## Login untuk dipakai sekarang
 
-Buka `index.html` dengan static hosting (GitHub Pages/Netlify/Vercel). Mode awal menyimpan data di browser `localStorage` sehingga bisa langsung dicoba.
-
-Untuk menghubungkan Supabase, isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY` di `config.js`. Jangan pernah memasukkan `service_role key` ke frontend. SQL awal tersedia di `supabase-schema.sql`.
+- Admin: `admin` / `power88`
+- Member: `member` / `member`
 
 ## Fitur
 
-- Login admin dan login peserta menggunakan Member ID.
-- Admin dapat menambah, mengedit, dan menghapus peserta; status ikut dan pembayaran tersedia.
-- Data tujuan/tanggal outing.
-- Pembelian barang dan konsumsi dengan kategori bebas/custom.
-- Foto bukti dikompres di browser menjadi JPEG max 1280px sebelum disimpan.
-- Export Excel, PDF, dan Word lokal.
-- Import XLSX/CSV dan download template untuk peserta, pembelian, serta konsumsi.
+- Admin dapat menambah, mengedit, dan menghapus data peserta.
+- Member dapat masuk dengan akun sederhana `member/member` untuk melihat informasi outing.
+- Status peserta: Ikut, Batal ikut, Tidak ikut.
+- Status pembayaran: Belum bayar, Bayar sebagian, Sudah bayar.
+- Data tujuan, tanggal, dan catatan outing.
+- Pembelian barang dan konsumsi dengan kategori bawaan atau custom.
+- Upload foto bukti dengan kompresi JPEG di browser.
+- Export laporan Excel, PDF, dan Word langsung ke komputer.
+- Import XLSX/CSV serta download template Excel.
+- Data demo tersimpan di `localStorage` browser, sehingga ringan dan langsung digunakan.
 
-> Catatan keamanan: password member pada demo/local mode hanya untuk prototipe. Untuk produksi, gunakan Supabase Auth (akun per member) atau Edge Function yang melakukan verifikasi password secara aman; jangan menyimpan password plaintext di tabel publik.
+## Upload ke InfinityFree
+
+1. Upload `index.html`, `styles.css`, `app.js`, `config.js`, dan `member-login.js` ke folder `htdocs`.
+2. Pastikan nama file dan huruf besar/kecil sama persis.
+3. Buka domain Anda.
+4. Gunakan login di atas.
+
+Library Excel dan PDF dimuat dari CDN. Jika jaringan CDN diblokir, login dan CRUD tetap bisa digunakan, tetapi fitur export/import membutuhkan koneksi CDN.
+
+## Catatan penting
+
+Mode ini menyimpan data per-browser/per-device. Artinya data yang ditambahkan dari satu perangkat belum otomatis terlihat di perangkat lain. Untuk data bersama online, sambungkan Supabase dengan RLS/policy yang benar. Jangan memasukkan `service_role key` ke frontend.
