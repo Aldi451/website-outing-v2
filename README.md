@@ -26,6 +26,7 @@ Mode lihat hanya dapat membaca informasi outing dan rundown. Perubahan bersama d
 - Tampilan responsif dengan menu mobile dan daftar data yang lebih mudah dibaca di layar kecil.
 - CSS fallback inline + guard anti-MIME di `index.html`, sehingga halaman tetap tampil rapi di hosting gratisan yang kadang mengirim file CSS sebagai `text/html`.
 - Sinkronisasi Supabase per tabel: nama tabel yang gagal dilaporkan, tanggal/angka dari Excel dinormalisasi sebelum upload, dan tombol **🩺 Cek Supabase** memeriksa skema secara *read-only* (tidak melakukan upload/hapus).
+- Setelah upload, muncul jendela **rincian per tabel** (terkirim / ditolak + sebabnya / dilewati karena kosong) dan tombol **ℹ Detail upload** + **📋 Salin detail**; dialog konfirmasi upload menyebut tabel yang akan dikirim beserta akun login yang dipakai.
 - Data demo tersedia lokal; perubahan disimpan di `localStorage` browser sampai berhasil diupload.
 
 ## Upload ke InfinityFree
@@ -76,7 +77,7 @@ Aplikasi membaca Supabase saat dibuka, tetapi **tidak otomatis mengirim data dem
     where email = 'admin@domainanda.com';
    ```
 
-5. Deploy ulang file website yang berubah, muat ulang halaman, lalu login menggunakan **email/password Supabase** tersebut (bukan `admin/power88`). Klik **🩺 Cek Supabase**: ini hanya membaca kolom, **bukan** menguji atau melakukan penulisan. Periksa data lokal di halaman, lalu klik **↻ Upload ke Supabase** dan setujui konfirmasi. Upload menyamakan keenam tabel dengan browser ini, **termasuk menghapus baris server yang tidak ada di browser**. Verifikasi jumlah baris melalui Table Editor atau buka dari browser lain.
+5. Deploy ulang file website yang berubah, muat ulang halaman (`Ctrl+Shift+R`), lalu login menggunakan **email/password Supabase** tersebut (bukan `admin/power88`). Klik **🩺 Cek Supabase**: ini hanya membaca kolom, **bukan** menguji atau melakukan penulisan. Periksa data lokal di halaman, lalu klik **↻ Upload ke Supabase** dan setujui konfirmasi. Upload menyamakan keenam tabel dengan browser ini, **termasuk menghapus baris server yang tidak ada di browser**. Sesudahnya muncul rincian per tabel (terkirim / ditolak + sebabnya / dilewati karena kosong); kalau ada yang ditolak, klik **📋 Salin detail** untuk melihat penyebab lengkapnya. Verifikasi jumlah baris melalui Table Editor atau buka dari browser lain.
 6. Jika browser sudah punya data lokal tetapi Anda justru ingin menampilkan data server, gunakan **↓ Muat dari Supabase** dengan sadar: tindakan ini mengganti data lokal yang belum terupload.
 
 Policy tulis default hanya menerima user Supabase dengan claim `app_metadata.role = "admin"`; login lokal tidak memiliki session itu. Jangan menaruh `service_role key` atau password admin di frontend. Opsi anon menulis di schema **tidak aman** karena siapa pun dengan anon key publik dapat mengubah dan menghapus semua data; jangan gunakan untuk data peserta.

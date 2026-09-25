@@ -71,8 +71,10 @@ subdomain lain milik Anda sendiri). Semua file harus berada di domain yang sama.
 
 ## Yang sudah diperbaiki di repo ini
 
-1. **`index.html` memuat CSS dengan versi**: `styles.css?v=3`, `app.js?v=3`, dan seterusnya,
-   supaya browser tidak memakai file lama dari cache InfinityFree.
+1. **`index.html` memuat CSS dengan versi**: `styles.css?v=3`, `app.js?v=6`,
+   `supabase-sync.js?v=6`, dan seterusnya, supaya browser tidak memakai file lama dari cache
+   InfinityFree. Naikkan angka `?v=` setiap kali `app.js`/`supabase-sync.js` diubah dan
+   upload ulang, lalu muat ulang halaman dengan `Ctrl+Shift+R` (hard reload).
 2. **CSS fallback inline di dalam `index.html`** (blok `<style>` kecil di `<head>`). Login
    screen tetap layak dilihat walaupun `styles.css` gagal dimuat.
 3. **Guard anti-MIME di dalam `index.html`.** Kalau `styles.css` tidak jadi terpasang,

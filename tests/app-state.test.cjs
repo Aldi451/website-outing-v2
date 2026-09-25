@@ -52,3 +52,44 @@ test('an empty category list loaded from Supabase stays empty, not demo categori
   assert.equal(vm.runInContext('normaliseDatabase({ categories: [] }).categories.length', context), 0);
   assert.equal(vm.runInContext('normaliseDatabase({}).categories.length', context), 6);
 });
+
+test('upload report UI names every table, the skipped ones, and the login state', () => {
+  const { context } = app();
+  const report = {
+    at: '2026-09-25T05:00:00.000Z',
+    ok: false,
+    blockedReason: '',
+    blockedMessage: '',
+    session: { active: false, email: '', role: '' },
+    tables: [
+      { table: 'participants', ok: false, status: 'ditolak', sent: 3, deleted: 0, skipped: false, code: '42501', detail: 'ditolak RLS/policy: new row violates row-level security policy', hint: 'Login dengan email & password admin Supabase.' },
+      { table: 'rundown', ok: true, status: 'dilewati', sent: 0, deleted: 0, skipped: true, code: '', detail: 'Kosong di browser ini, jadi tidak dikirim.', hint: '' }
+    ],
+    failedTables: ['participants'],
+    skippedTables: ['rundown'],
+    sentTables: [],
+    counts: { failed: 1, skipped: 1, sent: 0 }
+  };
+  context.__report = report;
+  const html = vm.runInContext('renderUploadReport(__report)', context);
+  assert.match(html, /Upload ditolak pada 1 tabel: participants/);
+  assert.match(html, /ditolak<\/span>/);
+  assert.match(html, /rundown/);
+  assert.match(html, /dilewati<\/span>/);
+  assert.match(html, /Tidak ada session Supabase/);
+  assert.match(html, /app_metadata\.role/);
+
+  const text = vm.runInContext('uploadReportText(__report)', context);
+  assert.match(text, /- rundown: DILEWATI/);
+  assert.match(text, /Login: tanpa session Supabase/);
+
+  assert.match(vm.runInContext('renderUploadReport(null)', context), /Belum ada percobaan upload/);
+});
+
+test('the upload confirmation lists the tables that will be sent and the empty ones', () => {
+  const { context } = app();
+  vm.runInContext('db.rundown = []; db.consumption = []', context);
+  const plan = vm.runInContext('uploadPlanText()', context);
+  assert.match(plan, /Akan dikirim: .*participants/);
+  assert.match(plan, /Dilewati karena kosong: rundown, consumption/);
+});
