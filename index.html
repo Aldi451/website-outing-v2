@@ -28,7 +28,7 @@
     .btn.primary { background: #0e9f9a; color: #fff; }
     .wide { width: 100%; display: flex; justify-content: space-between; }
   </style>
-  <link id="app-styles" rel="stylesheet" href="styles.css?v=9" />
+  <link id="app-styles" rel="stylesheet" href="styles.css?v=10" />
   <script>
     /* InfinityFree / free-hosting guard.
        Free hosting runs a "Browser Security System": when its check has not finished
@@ -40,7 +40,7 @@
        reloads once so the security cookie can be set. Remove only if your host
        always sends correct MIME types. */
     (function () {
-      var CSS_HREF = 'styles.css?v=9';
+      var CSS_HREF = 'styles.css?v=10';
       var MAX_TRIES = 2;
       var tries = 0;
 
@@ -106,13 +106,14 @@
       <p class="eyebrow">OUTING MANAGEMENT</p>
       <form id="login-form" class="stack">
         <label>User ID / Email
-          <input id="login-id" required autocomplete="username" placeholder="admin atau member" />
+          <input id="login-id" required autocomplete="username" placeholder="admin / member / email Supabase" />
         </label>
         <label>Password
           <input id="login-password" required type="password" autocomplete="current-password" placeholder="••••••••" />
         </label>
         <button class="btn primary wide" type="submit">Masuk <span aria-hidden="true">→</span></button>
       </form>
+      <div class="login-note"><b>Upload ke Supabase butuh login email+password admin Supabase</b> (dibuat di Authentication → Users + <code>supabase-set-admin.sql</code>). Login <code>admin / power88</code> hanya menyimpan data di browser ini dan pasti ditolak saat Upload (<code>permission denied</code>). Mode lihat: <code>member / member</code>.</div>
     </div>
   </section>
 
@@ -182,8 +183,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="outingCdnFallback('supabase', 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js')()"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="outingCdnFallback('XLSX', 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js')()"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" onerror="outingCdnFallback('jspdf', 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js')()"></script>
-  <script src="config.js?v=9"></script>
-  <script src="supabase-sync.js?v=9"></script>
-  <script src="app.js?v=9"></script>
+  <script src="config.js?v=10"></script>
+  <script src="supabase-sync.js?v=10"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
