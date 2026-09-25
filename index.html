@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e9f9a" />
   <title>Outing Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,46 +11,75 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <section id="login-screen" class="login-screen">
     <div class="login-card">
-      <div class="brand-mark">✦</div>
+      <div class="brand-mark" aria-hidden="true">✦</div>
       <p class="eyebrow">OUTING HUB</p>
       <h1>Kelola outing tanpa ribet.</h1>
-      <p class="muted">Masuk sebagai admin atau peserta untuk melihat informasi outing.</p>
+      <p class="muted">Masuk sebagai admin untuk mengelola data, atau mode lihat untuk memantau informasi outing.</p>
       <form id="login-form" class="stack">
-        <label>User ID / Email<input id="login-id" required placeholder="admin atau member" /></label>
-        <label>Password<input id="login-password" required type="password" placeholder="••••••••" /></label>
-        <button class="btn primary wide" type="submit">Masuk <span>→</span></button>
+        <label>User ID / Email
+          <input id="login-id" required autocomplete="username" placeholder="admin atau member" />
+        </label>
+        <label>Password
+          <input id="login-password" required type="password" autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button class="btn primary wide" type="submit">Masuk <span aria-hidden="true">→</span></button>
       </form>
-      
+      <div class="login-note"><b>Info:</b> peserta tidak perlu dibuatkan akun atau password. Admin dapat mengatur daftar peserta dan rundown.</div>
     </div>
   </section>
 
   <div id="app" class="app hidden">
-    <aside class="sidebar">
-      <div class="logo"><span>✦</span><strong>Outing Hub</strong></div>
-      <div class="profile"><div id="avatar" class="avatar">A</div><div><b id="profile-name">Admin</b><small id="profile-role">Administrator</small></div></div>
-      <nav id="navigation">
+    <aside class="sidebar" id="sidebar">
+      <div class="logo"><span aria-hidden="true">✦</span><strong>Outing Hub</strong></div>
+      <div class="profile">
+        <div id="avatar" class="avatar">A</div>
+        <div><b id="profile-name">Admin</b><small id="profile-role">Administrator</small></div>
+      </div>
+      <nav id="navigation" aria-label="Navigasi utama">
         <button data-page="dashboard" class="nav-item active">⌂ <span>Dashboard</span></button>
         <button data-page="participants" class="nav-item admin-only">♙ <span>Data Peserta</span></button>
         <button data-page="outing" class="nav-item">⌖ <span>Data Outing</span></button>
+        <button data-page="rundown" class="nav-item">☷ <span>Rundown</span></button>
         <button data-page="expenses" class="nav-item admin-only">▣ <span>Pembelian Barang</span></button>
         <button data-page="consumption" class="nav-item admin-only">◉ <span>Konsumsi</span></button>
         <button data-page="reports" class="nav-item admin-only">⇩ <span>Reporting & Import</span></button>
       </nav>
-      <button id="logout" class="logout">↪ Keluar</button>
+      <button id="logout" class="logout">↪ <span>Keluar</span></button>
     </aside>
-    <main class="main"><header class="topbar"><div><p class="eyebrow">OVERVIEW</p><h2 id="page-title">Dashboard</h2></div><div class="top-actions"><span id="connection-status" class="status-pill">Local mode</span><button id="quick-add" class="btn primary admin-only">+ Tambah data</button></div></header><div id="page-content"></div></main>
+    <button id="menu-backdrop" class="menu-backdrop" aria-label="Tutup menu"></button>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-heading">
+          <button id="mobile-menu-toggle" class="menu-toggle" aria-label="Buka menu">☰</button>
+          <div><p class="eyebrow">OVERVIEW</p><h2 id="page-title">Dashboard</h2></div>
+        </div>
+        <div class="top-actions">
+          <span id="connection-status" class="status-pill">Local mode</span>
+          <button id="quick-add" class="btn primary admin-only">+ Tambah data</button>
+        </div>
+      </header>
+      <div id="page-content"></div>
+    </main>
   </div>
 
-  <dialog id="data-dialog"><form method="dialog" id="data-form"><div class="dialog-head"><h3 id="dialog-title">Tambah Data</h3><button value="cancel" class="icon-btn">×</button></div><div id="dialog-fields" class="form-grid"></div><div class="dialog-actions"><button value="cancel" class="btn ghost">Batal</button><button id="dialog-save" value="default" class="btn primary">Simpan</button></div></form></dialog>
+  <dialog id="data-dialog">
+    <form method="dialog" id="data-form">
+      <div class="dialog-head"><h3 id="dialog-title">Tambah Data</h3><button value="cancel" class="icon-btn" aria-label="Tutup">×</button></div>
+      <div id="dialog-fields" class="form-grid"></div>
+      <div class="dialog-actions"><button value="cancel" class="btn ghost">Batal</button><button id="dialog-save" value="default" class="btn primary">Simpan</button></div>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="config.js"></script>
   <script src="supabase-sync.js"></script>
   <script src="app.js"></script>
-  <script src="member-login.js"></script>
 </body>
 </html>
