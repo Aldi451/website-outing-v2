@@ -40,7 +40,7 @@
       </nav>
       <button id="logout" class="logout">↪ Keluar</button>
     </aside>
-    <main class="main"><header class="topbar"><div><p class="eyebrow">OVERVIEW</p><h2 id="page-title">Dashboard</h2></div><div class="top-actions"><span id="connection-status" class="status-pill">● Local mode</span><button id="quick-add" class="btn primary admin-only">+ Tambah data</button></div></header><div id="page-content"></div></main>
+    <main class="main"><header class="topbar"><div><p class="eyebrow">OVERVIEW</p><h2 id="page-title">Dashboard</h2></div><div class="top-actions"><span id="connection-status" class="status-pill">Local mode</span><button id="quick-add" class="btn primary admin-only">+ Tambah data</button></div></header><div id="page-content"></div></main>
   </div>
 
   <dialog id="data-dialog"><form method="dialog" id="data-form"><div class="dialog-head"><h3 id="dialog-title">Tambah Data</h3><button value="cancel" class="icon-btn">×</button></div><div id="dialog-fields" class="form-grid"></div><div class="dialog-actions"><button value="cancel" class="btn ghost">Batal</button><button id="dialog-save" value="default" class="btn primary">Simpan</button></div></form></dialog>
@@ -48,6 +48,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="config.js"></script>
+  <script src="supabase-sync.js"></script>
   <script src="app.js"></script>
   <script src="member-login.js"></script>
 </body>
