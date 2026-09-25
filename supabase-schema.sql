@@ -211,9 +211,13 @@ begin
     begin execute 'alter table public.participants alter column payment set default ''Belum bayar'''; exception when others then null; end;
   end if;
 
-  -- Fallback paksa ke text
-  begin execute 'alter table public.participants alter column status type text using status::text'; exception when others then null; end;
-  begin execute 'alter table public.participants alter column payment type text using payment::text'; exception when others then null; end;
+  -- Fallback paksa ke text (hanya jika kolom ada)
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='status') then
+    begin execute 'alter table public.participants alter column status type text using status::text'; exception when others then null; end;
+  end if;
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='payment') then
+    begin execute 'alter table public.participants alter column payment type text using payment::text'; exception when others then null; end;
+  end if;
 
   -- 0d) Recreate VIEW
   for rec in select * from _tmp_outing_view_defs loop
@@ -254,17 +258,18 @@ begin
   end if;
 
   execute 'update public.participants set phone = ''-'' where phone is null or phone = '''''';
-  execute 'alter table public.participants alter column phone set not null';
-  -- pakai ::text agar aman baik untuk kolom text maupun sisa enum
-  execute 'update public.participants set status = ''Ikut'' where status::text is null or status::text not in (''Ikut'',''Batal ikut'',''Tidak ikut'')';
-  execute 'update public.participants set payment = ''Belum bayar'' where payment::text is null or payment::text not in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar'')';
-  begin
-    execute 'alter table public.participants alter column status set default ''Ikut''';
-    execute 'alter table public.participants alter column payment set default ''Belum bayar''';
-  exception when others then null;
-  end;
-  execute 'alter table public.participants alter column status set not null';
-  execute 'alter table public.participants alter column payment set not null';
+  begin execute 'alter table public.participants alter column phone set not null'; exception when others then null; end;
+  -- pakai ::text agar aman baik untuk kolom text maupun sisa enum, dan hanya jika kolom ada
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='status') then
+    execute 'update public.participants set status = ''Ikut'' where status::text is null or status::text not in (''Ikut'',''Batal ikut'',''Tidak ikut'')';
+    begin execute 'alter table public.participants alter column status set default ''Ikut'''; exception when others then null; end;
+    begin execute 'alter table public.participants alter column status set not null'; exception when others then null; end;
+  end if;
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='payment') then
+    execute 'update public.participants set payment = ''Belum bayar'' where payment::text is null or payment::text not in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar'')';
+    begin execute 'alter table public.participants alter column payment set default ''Belum bayar'''; exception when others then null; end;
+    begin execute 'alter table public.participants alter column payment set not null'; exception when others then null; end;
+  end if;
 
   -- Jangan isi nama peserta lama dengan nama palsu. Bila tabel kosong (seperti
   -- pada laporan 0 baris) atau semua baris sudah bernama, aman memasang NOT NULL.
@@ -292,20 +297,24 @@ begin
   end if;
 end $$;
 
--- Pastikan constraint text ada untuk migrasi.
+-- Pastikan constraint text ada untuk migrasi (hanya jika kolom ada).
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'participants_status_text_check' and conrelid = 'public.participants'::regclass) then
-    begin
-      execute 'alter table public.participants add constraint participants_status_text_check check (status in (''Ikut'',''Batal ikut'',''Tidak ikut''))';
-    exception when others then null;
-    end;
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='status') then
+    if not exists (select 1 from pg_constraint where conname = 'participants_status_text_check' and conrelid = 'public.participants'::regclass) then
+      begin
+        execute 'alter table public.participants add constraint participants_status_text_check check (status in (''Ikut'',''Batal ikut'',''Tidak ikut''))';
+      exception when others then null;
+      end;
+    end if;
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'participants_payment_text_check' and conrelid = 'public.participants'::regclass) then
-    begin
-      execute 'alter table public.participants add constraint participants_payment_text_check check (payment in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar''))';
-    exception when others then null;
-    end;
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='participants' and column_name='payment') then
+    if not exists (select 1 from pg_constraint where conname = 'participants_payment_text_check' and conrelid = 'public.participants'::regclass) then
+      begin
+        execute 'alter table public.participants add constraint participants_payment_text_check check (payment in (''Belum bayar'',''Bayar sebagian'',''Sudah bayar''))';
+      exception when others then null;
+      end;
+    end if;
   end if;
 end $$;
 
