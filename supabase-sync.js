@@ -153,7 +153,7 @@
     // PGRST204 also says "schema cache", but means a missing COLUMN (not table).
     { match: (error) => error.code === '42703' || error.code === 'PGRST204' || /could not find the .+ column|column .+ does not exist/i.test(error.message), hint: 'Kolom tabel belum lengkap -> jalankan seluruh supabase-schema.sql (blok migrasi) di SQL Editor.', label: 'kolom belum dibuat' },
     { match: (error) => error.code === '42P01' || error.code === 'PGRST205' || /relation .* does not exist|could not find the table/i.test(error.message), hint: 'Tabel belum ada di Supabase -> jalankan supabase-schema.sql di SQL Editor Supabase.', label: 'tabel belum dibuat' },
-    { match: (error) => error.code === '42501' || /row-level security|permission denied/i.test(error.message), hint: 'Login memakai email & password admin Supabase dengan app_metadata.role = "admin"; jangan izinkan anon menulis data peserta.', label: 'ditolak RLS/policy' },
+    { match: (error) => error.code === '42501' || /row-level security|permission denied/i.test(error.message), hint: 'Login lokal (admin/power88) tidak punya izin tulis. Logout, login dengan email+password admin Supabase (app_metadata.role = "admin", lihat supabase-set-admin.sql), lalu Upload lagi. Jangan aktifkan tulis anon untuk data peserta.', label: 'ditolak RLS/policy' },
     { match: (error) => error.code === '23502' || /null value in column/i.test(error.message), hint: 'Ada kolom wajib yang kosong (biasanya tanggal) -> isi tanggal di data tersebut.', label: 'kolom wajib kosong' },
     { match: (error) => error.code === '23514' || /check constraint/i.test(error.message), hint: 'Nilai status/pembayaran tidak sesuai daftar yang diizinkan (Ikut / Batal ikut / Tidak ikut).', label: 'nilai tidak valid' },
     { match: (error) => error.code === '23505' || /duplicate key/i.test(error.message), hint: 'Ada ID data yang bentrok -> hapus duplikatnya lalu upload lagi.', label: 'ID ganda' },
@@ -627,7 +627,7 @@
         write: 'belum diuji',
         writeDetail: adminSession
           ? 'Belum diuji; gunakan tombol Upload untuk mengirim data setelah memeriksa isinya.'
-          : 'Belum diuji; login email/password admin Supabase diperlukan untuk policy tulis default.',
+          : 'Belum diuji; logout lalu login dengan email/password admin Supabase (lihat supabase-set-admin.sql). Login lokal pasti ditolak policy tulis.',
         hint: read.ok ? '' : read.hint
       };
     });

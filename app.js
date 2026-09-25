@@ -155,7 +155,7 @@ function syncFailureMessage(result) {
     const schema = result.schemaFailures?.length
       ? `${result.schemaFailures.length} tabel perlu perbaikan skema (${result.schemaFailures.join(', ')}). `
       : '';
-    return `Upload ditolak RLS pada ${failedTables.length} tabel: ${failedText}. ${schema}Login memakai email/password admin Supabase.${skippedText}`;
+    return `Upload ditolak RLS pada ${failedTables.length} tabel: ${failedText}. ${schema}Logout, lalu login dengan email/password admin Supabase (bukan admin/power88, lihat supabase-set-admin.sql), lalu Upload lagi.${skippedText}`;
   }
   if (failedTables.length) {
     return `Upload gagal pada ${failedTables.length} tabel: ${failedText}.${hint}${skippedText}`;
@@ -317,7 +317,7 @@ function startApp() {
   refreshSyncDetailButton();
   // Warn before the first upload attempt instead of after a confusing failure.
   if (isAdmin() && session.local) {
-    showToast('Login lokal: data hanya tersimpan di browser ini. Untuk upload ke Supabase, login dengan email/password admin Supabase.');
+    showToast('Login lokal: data hanya tersimpan di browser ini. Untuk upload, logout lalu login dengan email/password admin Supabase (lihat supabase-set-admin.sql).');
   }
 }
 
@@ -954,11 +954,20 @@ function renderUploadReport(report) {
   const session = report.session || {};
   const sessionText = session.active
     ? `Session Supabase aktif sebagai <b>${escapeHtml(session.email || '-')}</b> (role: ${escapeHtml(session.role || 'tidak ada')})`
-    : '<b>Tidak ada session Supabase.</b> Login lokal <code>admin / power88</code> hanya membuka aplikasi di browser; policy tulis default menolak role anon, sehingga tabel yang berisi data akan gagal.';
+    : '<b>Tidak ada session Supabase (login lokal).</b> <code>admin / power88</code> hanya membuka aplikasi di browser; server hanya melihat peran <code>anon</code> yang izin tulisnya dicabut, sehingga setiap tabel berisi data PASTI gagal dengan <code>permission denied</code> / <code>42501</code>. Solusinya bukan mengulang Upload, melainkan ganti cara login (lihat langkah di bawah).';
 
   const adminHint = report.ok || session.role === 'admin'
     ? ''
-    : '<p class="report-note">Perbaiki dengan: Supabase → Authentication → Users → Add user (email + password), set <code>app_metadata.role = "admin"</code> lewat SQL Editor, lalu di aplikasi isi form login dengan email/password itu — bukan <code>admin/power88</code>.</p>';
+    : `<div class="report-note">
+        <b>Cara memperbaiki (5 menit, sekali saja):</b>
+        <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+          <li>Supabase → <b>Authentication → Users → Add user</b>: buat email + password baru, centang <b>Auto Confirm User</b>.</li>
+          <li>Supabase → <b>SQL Editor</b>: buka file <code>supabase-set-admin.sql</code> dari repo ini, ganti email pada <b>dua</b> baris <code>&lt;&lt;&lt; GANTI EMAIL DI SINI</code>, jalankan seluruh isinya (mengisi <code>app_metadata.role = "admin"</code>). Hasil verifikasi harus semua <b>OK</b>.</li>
+          <li>Di aplikasi klik <b>↪ Keluar</b>, lalu login dengan <b>email + password Supabase itu</b> — bukan <code>admin / power88</code>.</li>
+          <li>Klik <b>🩺 Cek Supabase</b> untuk memastikan baca OK, periksa isi data lokal, lalu klik <b>↻ Upload ke Supabase</b>.</li>
+        </ol>
+        <p class="muted" style="margin:8px 0 0">Jangan aktifkan tulis <code>anon</code> (OPSI 3 di schema): siapa pun dengan anon key publik bisa menghapus semua data tanpa login.</p>
+      </div>`;
 
   return `
     <div class="report">
@@ -1005,7 +1014,10 @@ function uploadPlanText() {
   ];
   const sent = counts.filter(([, total]) => total > 0).map(([name, total]) => `${name} (${total})`);
   const empty = counts.filter(([, total]) => total === 0).map(([name]) => name);
-  return `Akan dikirim: ${sent.join(', ') || 'tidak ada data'}${empty.length ? `. Dilewati karena kosong: ${empty.join(', ')}` : ''}.`;
+  const emptyNote = empty.length
+    ? `. Dilewati karena kosong: ${empty.join(', ')} (kosong di browser ini; kalau seharusnya berisi data, berarti datanya hanya ada di browser/perangkat lain — kumpulkan dulu sebelum upload)`
+    : '';
+  return `Akan dikirim: ${sent.join(', ') || 'tidak ada data'}${emptyNote}.`;
 }
 
 /** Keeps the "Detail upload" button in sync with the last upload result. */
@@ -1516,7 +1528,7 @@ $('#sync-now')?.addEventListener('click', async () => {
   // Show exactly what will be sent and with which login, so a later "only some
   // tables failed" message is easy to understand.
   const loginNote = session?.local
-    ? 'Login saat ini LOKAL (admin/power88), bukan akun Supabase: policy tulis default akan menolak upload.'
+    ? 'Login saat ini LOKAL (admin/power88), bukan akun Supabase: policy tulis default PASTI menolak upload (permission denied / 42501). Batalkan, logout, login dengan email+password admin Supabase (lihat supabase-set-admin.sql), lalu Upload lagi. Lanjut hanya jika Anda sengaja mengaktifkan tulis anon (tidak disarankan untuk data peserta).'
     : `Login Supabase: ${session?.name || 'tidak diketahui'}.`;
   if (!confirm(`Upload akan mengirim seluruh data lokal ke tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini.\n\n${uploadPlanText()}\n${loginNote}\n\nUpload sekarang?`)) return;
   const button = $('#sync-now');
