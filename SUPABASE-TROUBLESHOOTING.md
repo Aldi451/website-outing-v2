@@ -86,6 +86,10 @@ session email/password Supabase.
     where email = 'admin@domainanda.com';
    ```
 
+   Praktisnya: ganti email di `supabase-set-admin.sql`, jalankan seluruh isinya di
+   SQL Editor — file itu mengeset role admin sekaligus memverifikasi role, grant,
+   dan policy tulis keenam tabel.
+
 3. Login di aplikasi memakai **email + password Supabase** itu (bukan `admin/power88`).
    Kalau akun belum punya role admin, aplikasi akan menolak dengan pesan
    "Akun Supabase ini belum memiliki role admin".
