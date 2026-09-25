@@ -16,20 +16,24 @@ Tabel yang dikirim ke Supabase ada **6**:
 | `outing` | tujuan, tanggal, catatan outing |
 | `outing_categories` | kategori custom |
 
-Kalau muncul notifikasi **"Data tersimpan lokal, tetapi belum masuk ke Supabase"**, berarti
-salah satu (atau beberapa) tabel di atas ditolak server. Sejak versi sekarang:
-notifikasi **menyebut nama tabel** yang gagal, dan status di kanan atas berubah menjadi
-**⚠ Login lokal (tanpa session)** atau **⚠ Gagal sinkronisasi**. Arahkan kursor ke status itu
-untuk melihat pesan asli dari Supabase, dan buka **Console browser** untuk detail lengkapnya.
+Jika muncul **"Data tersimpan lokal"**, ada dua kemungkinan: perubahan belum pernah
+diupload (browser ini belum dikonfirmasi tersinkron), atau upload dicoba tetapi ditolak
+server. Status kanan atas menunjukkan **⚠ Data lokal belum terunggah**, **⚠ Login lokal
+(tanpa session)**, atau **⚠ Gagal sinkronisasi**. Pesan hover dan Console browser
+berisi detail percobaan upload yang *benar-benar dilakukan*.
 
 ## Cara paling cepat tahu penyebabnya
 
-Login sebagai admin, lalu tekan tombol **🩺 Cek Supabase** di kanan atas. Tombol itu
-memeriksa satu per satu: bisa dibaca atau tidak, ada berapa baris, dan bisa ditulis atau
-tidak — lalu menampilkan laporan per tabel beserta langkah perbaikannya.
+Login sebagai admin, lalu tekan tombol **🩺 Cek Supabase**. Pemeriksaan ini hanya melakukan
+HEAD/SELECT terhadap **semua kolom yang dibutuhkan** tiap tabel dan menampilkan jumlah baris
+yang bisa dilihat. **Tidak mengirim atau menghapus data; akses tulis ditandai "belum diuji".**
+Bahkan hasil baca "OK, 0 baris" tidak membuktikan tabel kosong apabila RLS menyembunyikan
+baris. Jalankan juga `supabase-diagnose.sql` lewat SQL Editor untuk memeriksa policy/kolom.
 
-Di Supabase, jalankan juga **`supabase-diagnose.sql`** (SQL Editor → Run). Hasilnya
-menunjukkan tabel/kolom/policy mana yang belum siap. Kedua cara ini tidak mengubah data.
+Setelah schema diperbaiki dan login email admin Supabase, cek isi browser, lalu klik
+**↻ Upload ke Supabase** untuk sungguh-sungguh menguji tulis. **Peringatan:** upload
+menyamakan tabel server dengan browser ini dan dapat menghapus baris server yang tidak ada
+di browser; dialog meminta konfirmasi. Jangan hapus data browser yang belum terupload.
 
 ## Penyebab, berurutan dari yang paling sering
 
@@ -45,7 +49,9 @@ Pesan yang muncul:
 new row violates row-level security policy for table "participants"   (code 42501)
 ```
 
-Semua tabel akan gagal sekaligus, karena policy tulis mensyaratkan claim admin.
+Semua tabel yang **skema dan kolomnya sudah ada** dapat ditolak saat tulis;
+tabel/kolom yang belum ada memberikan error berbeda. Login lokal tidak dapat menggantikan
+session email/password Supabase.
 
 **Solusi A (disarankan, aman):**
 
@@ -62,10 +68,10 @@ Semua tabel akan gagal sekaligus, karena policy tulis mensyaratkan claim admin.
    Kalau akun belum punya role admin, aplikasi akan menolak dengan pesan
    "Akun Supabase ini belum memiliki role admin".
 
-**Solusi B (tanpa akun Supabase):** aktifkan **OPSI 3** di `supabase-schema.sql`, yaitu
-policy yang mengizinkan `anon` menulis. Login `admin/power88` langsung bisa upload.
-Risikonya nyata: anon key terlihat di `config.js`, jadi siapa pun yang membuka website bisa
-mengubah data. Pakai hanya kalau risikonya diterima.
+**Jangan gunakan login lokal sebagai solusi RLS.** OPSI 3 (anon write) di schema
+dinonaktifkan secara default: jika diaktifkan, **siapa pun** yang mengetahui anon key
+publik, bahkan tanpa login admin/power88, dapat mengubah/menghapus seluruh data peserta.
+Password lokal bukan pengaman database.
 
 ### 2. Policy RLS belum ada / masih versi lama
 
@@ -77,9 +83,13 @@ atau malah tidak bisa membaca data sama sekali (daftar selalu kembali ke data lo
 - Belum bisa membaca → policy baca masih `to authenticated` (versi schema lama) sedangkan
   login yang dipakai mode lokal. `supabase-schema.sql` versi terbaru membuat policy baca
   untuk publik (`to anon` + `to authenticated`) sehingga mode lihat tetap jalan; kalau
-  privasi lebih penting, pakai OPSI 2 di file itu dan login dengan akun Supabase.
-- Jalankan ulang `supabase-schema.sql` — sekarang **aman diulang** (semua policy di-drop
-  dulu sebelum dibuat), jadi tidak akan error "policy already exists".
+  privasi lebih penting, pakai OPSI 2; ingat login member lokal tidak lagi bisa memuat
+  data online, dan aplikasi perlu alur login pembaca Supabase tersendiri.
+- Jalankan ulang `supabase-schema.sql` versi terbaru. Policy bawaan di-drop dan dibuat
+  ulang sehingga tidak error "policy already exists". Periksa juga policy lain yang dibuat
+  manual dengan `supabase-diagnose.sql`. Default baca publik membocorkan nama + nomor
+  telepon peserta kepada siapa pun yang memiliki URL + anon key; OPSI 2 membatasi baca
+  tetapi memerlukan alur login pembaca tambahan.
 
 ### 3. Tabel atau kolomnya belum ada di Supabase
 
@@ -87,16 +97,18 @@ Pesan:
 
 ```
 relation "public.participants" does not exist                       (code 42P01)
-column "phone" of relation "participants" does not exist            (code 42703)
-Could not find the table 'public.rundown' in the schema cache
+Could not find the 'name' column of 'participants' in the schema cache (PGRST204)
+Could not find the table 'public.rundown' in the schema cache          (PGRST205)
 ```
 
 Penyebab: `supabase-schema.sql` belum pernah dijalankan, dijalankan sebagian, atau database
 masih memakai struktur lama (`member_id` / `member_password`).
 
-Solusi: jalankan **seluruh** `supabase-schema.sql` di SQL Editor. Blok 2 di file itu
-memindahkan data lama dari `member_id` ke `phone` dan menambahkan kolom yang kurang
-(`payment`, `location`, `pic`, `notes`, `amount`, `photo_url`, dan lainnya).
+Solusi: jalankan **seluruh file TERBARU** `supabase-schema.sql` di SQL Editor. `CREATE
+TABLE IF NOT EXISTS` saja tidak memperbaiki tabel `participants` yang sudah ada tetapi
+belum punya kolom `name`; blok migrasi sekarang menambahkan `name` dan kolom lain yang
+kurang, memindahkan `member_id` ke `phone`, lalu menyuruh PostgREST me-refresh cache.
+Baris lama tanpa nama sengaja tidak diberi nama palsu; lengkapi namanya manual.
 
 ### 4. Isi data tidak memenuhi aturan kolom
 
@@ -123,11 +135,17 @@ Sudah ditangani otomatis oleh lapisan sinkronisasi sekarang:
 Kalau tetap muncul error tanggal, berarti ada nilai yang tidak bisa dikenali: perbaiki data
 tersebut (biasanya dari import Excel), lalu upload ulang.
 
-### 5. Kegagalan satu tabel tidak lagi memblokir tabel lain
+### 5. Kapan data lokal dikirim / diterima
 
-Sebelumnya semua tabel di-upload bersamaan dan satu error membatalkan seluruh proses,
-sehingga terasa seperti "semua masuk lokal". Sekarang keenam tabel dikirim dan dinilai
-terpisah, jadi laporan menunjukkan tabel mana yang benar-benar bermasalah.
+Project kosong **tidak lagi diisi otomatis dengan data demo** ketika halaman dibuka.
+Browser dengan data lokal yang belum pernah sukses upload juga **tidak otomatis ditimpa**
+oleh data Supabase yang baru dapat dibaca. Setelah upload pertama berhasil, perubahan
+berikutnya otomatis tersinkron; jika gagal, browser kembali masuk mode "belum terunggah"
+dan perlu upload ulang dengan sengaja. Percobaan upload memproses enam tabel secara
+terpisah agar error satu tabel tidak menyembunyikan error tabel lain. Data dari
+browser berbeda tidak otomatis digabung: tombol **↓ Muat dari Supabase** mengganti
+lokal, sedangkan tombol **↻ Upload ke Supabase** bisa mengganti/menghapus isi server.
+Buat cadangan sebelum memilih apabila kedua sisi berisi perubahan penting.
 
 ### 6. Library Supabase gagal dimuat dari CDN
 
@@ -161,8 +179,8 @@ Kirimkan hasil ini supaya bisa dipastikan:
 1. Laporan dari tombol **🩺 Cek Supabase** (atau hasil `supabase-diagnose.sql`).
 2. Tab **Console** browser: baris `Supabase sync failed for table "..."` berisi pesan asli
    dari Supabase beserta kodenya.
-3. Status pill di kanan atas (**⚠ Login lokal** / **⚠ Gagal sinkronisasi**) dan pesan
-   hover-nya.
+3. Status pill di kanan atas (**⚠ Data lokal belum terunggah** / **⚠ Login lokal** /
+   **⚠ Gagal sinkronisasi**) dan pesan hover-nya.
 
-Dengan tiga hal itu, penyebabnya bisa ditentukan tanpa menebak: apakah di user/claim,
-di policy, di tabel/kolom, atau di isi data.
+Jangan kirim password, service_role key, atau data pribadi peserta. Dengan pesan error
+tersebut penyebabnya dapat dibedakan: akun/claim, policy, tabel/kolom, atau isi data.

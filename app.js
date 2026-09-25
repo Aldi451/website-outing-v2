@@ -108,7 +108,7 @@ function normaliseDatabase(source = {}) {
     consumption: Array.isArray(source.consumption)
       ? source.consumption.map((item, index) => normaliseLedgerItem(item, index, 'c'))
       : clone(DEFAULT_DB.consumption),
-    categories: Array.isArray(source.categories) && source.categories.length
+    categories: Array.isArray(source.categories)
       ? source.categories.filter(Boolean)
       : clone(DEFAULT_DB.categories)
   };
@@ -125,9 +125,15 @@ function loadDb() {
 }
 
 function saveDb() {
+  // Never reconcile an unknown/unsynced browser snapshot against server rows
+  // just because an admin edited one field. First upload must be deliberate.
+  const autoSync = window.OUTING_SYNC?.canAutoSync?.();
+  window.OUTING_SYNC?.markLocalChanges?.();
   localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(db));
-  if (window.OUTING_SYNC?.queue) return window.OUTING_SYNC.queue(db);
-  return Promise.resolve({ ok: true, localOnly: true });
+  if (autoSync && window.OUTING_SYNC?.queue) return window.OUTING_SYNC.queue(db);
+  return Promise.resolve(window.OUTING_SYNC?.queue
+    ? { ok: false, pendingUpload: true }
+    : { ok: true, localOnly: true });
 }
 
 /**
@@ -138,7 +144,10 @@ function syncFailureMessage(result) {
   const hint = result?.hint ? ` ${result.hint}` : '';
   const tables = result?.failedTables || [];
   if (result?.localOnlyLogin) {
-    return `Data hanya tersimpan lokal: ${tables.length || 'semua'} tabel ditolak Supabase karena login masih mode lokal. Masuk dengan email & password admin Supabase, lalu cek lewat tombol 🩺 Cek Supabase.`;
+    if (!result.results) return `Data hanya tersimpan lokal. ${result.hint || 'Session Supabase lama perlu ditutup.'}`;
+    const schema = result.schemaFailures?.length || 0;
+    const rls = result.rlsFailures?.length || 0;
+    return `Data hanya tersimpan lokal: ${schema ? `${schema} tabel perlu perbaikan skema; ` : ''}${rls} tabel ditolak RLS tanpa session admin Supabase. Jalankan supabase-schema.sql, lalu login email/password admin Supabase.`;
   }
   if (tables.length) {
     return `Gagal kirim ke Supabase pada tabel: ${tables.join(', ')}.${hint}`;
@@ -147,10 +156,12 @@ function syncFailureMessage(result) {
 }
 
 function showSyncResult(result, successMessage = 'Data berhasil disimpan ke Supabase.') {
-  if (result?.ok && !result.localOnly) {
+  if (result?.pendingUpload) {
+    showToast('Data tersimpan lokal. Periksa isinya, lalu login admin Supabase dan klik Upload ke Supabase.');
+  } else if (result?.ok && !result.localOnly) {
     showToast(successMessage);
   } else if (result?.ok) {
-    showToast('Data tersimpan di browser. Supabase belum dikonfigurasi.');
+    showToast('Data tersimpan di browser; Supabase belum siap atau belum dikonfigurasi.');
   } else {
     if (result?.error) console.error('Sinkronisasi Supabase gagal:', result.error);
     if (result?.results) console.table(result.results.map(({ table, ok, label, message }) => ({ table, ok, label, message })));
@@ -219,67 +230,66 @@ function sortedRundown() {
   return [...(db.rundown || [])].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
 }
 
-function login(event) {
+async function login(event) {
   event.preventDefault();
   const userId = $('#login-id').value.trim();
   const password = $('#login-password').value;
 
-  if (userId === DEFAULT_ADMIN.userId && password === DEFAULT_ADMIN.password) {
-    session = { role: 'admin', name: 'Administrator' };
-    startApp();
-    return;
-  }
-
-  // A viewer uses one shared read-only login; participants no longer need accounts.
-  if (userId === DEFAULT_MEMBER.userId && password === DEFAULT_MEMBER.password) {
-    session = { role: 'member', name: 'Peserta' };
+  if ((userId === DEFAULT_ADMIN.userId && password === DEFAULT_ADMIN.password) ||
+      (userId === DEFAULT_MEMBER.userId && password === DEFAULT_MEMBER.password)) {
+    // A local login must not silently reuse a Supabase admin token left in this
+    // browser from an earlier session (or the "member" login could write).
+    window.OUTING_LOCAL_LOGIN = true;
+    try {
+      const { error } = (await window.OUTING_SYNC?.client?.auth.signOut({ scope: 'local' })) || {};
+      if (error) console.warn('Gagal keluar dari session Supabase:', error);
+    } catch (error) { console.warn('Gagal keluar dari session Supabase:', error); }
+    session = userId === DEFAULT_ADMIN.userId
+      ? { role: 'admin', name: 'Administrator', local: true }
+      : { role: 'member', name: 'Peserta', local: true };
     startApp();
     return;
   }
 
   const config = window.OUTING_CONFIG || {};
   const supabaseConfigured = Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY);
-
-  if (supabaseConfigured && !window.supabase) {
-    showToast('Library Supabase belum termuat. Cek koneksi ke CDN lalu muat ulang halaman.');
+  if (!supabaseConfigured) return showToast('User ID atau password tidak sesuai.');
+  if (!window.OUTING_SYNC?.client) {
+    showToast('Koneksi Supabase belum siap. Tunggu sebentar atau periksa koneksi CDN.');
     return;
   }
 
-  if (supabaseConfigured) {
-    const authClient = window.OUTING_SYNC?.client || window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
-    authClient.auth.signInWithPassword({ email: userId, password })
-      .then(({ data, error }) => {
-        if (!error && data?.user) {
-          const role = data.user.app_metadata?.role;
-          if (role !== 'admin') {
-            authClient.auth.signOut();
-            showToast('Akun Supabase ini belum memiliki role admin (app_metadata.role = "admin").');
-            return;
-          }
-          session = { role: 'admin', name: data.user.email || 'Admin Supabase' };
-          startApp();
-          // Re-read Supabase using the authenticated session before the next input.
-          window.OUTING_SYNC?.load?.();
-          return;
-        }
-        if (/invalid login credentials/i.test(error?.message || '')) {
-          showToast('Email/password Supabase tidak sesuai. Login lokal admin/power88 hanya menyimpan data di browser.');
-          return;
-        }
-        showToast(`Login Supabase gagal: ${error?.message || 'penyebab tidak diketahui'}.`);
-      })
-      .catch((error) => showToast(`Login Supabase gagal: ${error?.message || 'cek config.js'} - pastikan URL dan anon key benar.`));
-    return;
+  const authClient = window.OUTING_SYNC.client;
+  try {
+    const { data, error } = await authClient.auth.signInWithPassword({ email: userId, password });
+    if (error || !data?.user) {
+      showToast(/invalid login credentials/i.test(error?.message || '')
+        ? 'Email/password Supabase tidak sesuai. Login lokal admin/power88 hanya menyimpan data di browser.'
+        : `Login Supabase gagal: ${error?.message || 'penyebab tidak diketahui'}.`);
+      return;
+    }
+    if (data.user.app_metadata?.role !== 'admin') {
+      await authClient.auth.signOut({ scope: 'local' });
+      showToast('Akun Supabase ini belum memiliki role admin (app_metadata.role = "admin").');
+      return;
+    }
+    window.OUTING_LOCAL_LOGIN = false;
+    session = { role: 'admin', name: data.user.email || 'Admin Supabase', local: false };
+    startApp();
+    // Preserve unsynced local rows; explicitly choose Upload or Muat if needed.
+    const loaded = await window.OUTING_SYNC.load();
+    if (loaded?.preservedLocal) showToast('Data lokal dipertahankan. Periksa isinya sebelum memilih Upload atau Muat dari Supabase.');
+    else if (loaded && !loaded.ok && !loaded.superseded) showToast('Supabase belum bisa dibaca. Jalankan SQL schema lalu cek dengan tombol 🩺 Cek Supabase.');
+  } catch (error) {
+    showToast(`Login Supabase gagal: ${error?.message || 'cek config.js'}.`);
   }
-
-  showToast('User ID atau password tidak sesuai.');
 }
 
 function startApp() {
   $('#login-screen').classList.add('hidden');
   $('#app').classList.remove('hidden');
   $('#profile-name').textContent = getLoggedUserName();
-  $('#profile-role').textContent = isAdmin() ? 'Administrator' : 'Mode lihat';
+  $('#profile-role').textContent = isAdmin() ? (session.local ? 'Admin lokal (belum online)' : 'Admin Supabase') : 'Mode lihat';
   $('#avatar').textContent = isAdmin() ? 'A' : 'P';
   closeMobileMenu();
   render();
@@ -772,22 +782,26 @@ function renderDiagnoseReport(report) {
 
   const sessionText = report.session.active
     ? `Session Supabase aktif sebagai <b>${escapeHtml(report.session.email)}</b> (role: ${escapeHtml(report.session.role || 'tidak ada')})`
-    : 'Belum ada session Supabase: login yang dipakai masih mode lokal (admin/power88), jadi Supabase hanya mengizinkan baca dan menolak tulis.';
+    : 'Belum ada session Supabase. Login lokal admin/power88 tidak memberi izin menulis pada policy default.';
 
   const conclusion = report.ok
-    ? '<p class="report-note ok"><b>Semua tabel bisa dibaca dan ditulis.</b> Data sudah tersimpan di Supabase.</p>'
-    : `<p class="report-note bad"><b>Ada ${report.problems.length} tabel bermasalah.</b>${report.localOnlyLogin ? ' Penyebab paling mungkin: login masih mode lokal tanpa session Supabase.' : ''}</p>
+    ? '<p class="report-note ok"><b>Permintaan baca berhasil untuk semua tabel.</b> RLS mungkin menyembunyikan baris; penulisan BELUM diuji.</p>'
+    : `<p class="report-note bad"><b>Ada ${report.problems.length} tabel dengan masalah baca/skema.</b></p>
        ${report.hint ? `<p class="report-note">Langkah berikutnya: ${escapeHtml(report.hint)}</p>` : ''}`;
+  const loginHint = report.session.role !== 'admin'
+    ? '<p class="report-note">Untuk mengirim data, buat akun admin di Supabase Authentication dengan app_metadata.role = "admin", lalu login memakai email/password akun itu.</p>'
+    : '';
 
   return `
     <div class="report">
       ${conclusion}
+      ${loginHint}
       <p class="muted"><b>Project:</b> ${escapeHtml(report.url)}<br>${sessionText}</p>
       <table class="diagnose-table">
         <thead><tr><th>Tabel</th><th>Baca dari Supabase</th><th>Kirim ke Supabase</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="muted">Detail lengkap tiap tabel juga dicetak di tab Console browser.</p>
+      <p class="muted">Diagnosis ini hanya membaca: tidak ada data yang dikirim atau dihapus. Untuk menguji tulis, periksa data lokal lalu klik Upload ke Supabase (akan menyamakan seluruh tabel dengan isi browser ini).</p>
     </div>`;
 }
 
@@ -835,6 +849,7 @@ async function handleFormSubmit(event) {
 
   if (type === 'outing') {
     db.outing = {
+      id: db.outing.id || '',
       destination: values.destination.trim(),
       date: values.date,
       description: (values.description || '').trim()
@@ -1150,7 +1165,8 @@ const loginForm = $('#login-form');
 if (loginForm) loginForm.addEventListener('submit', login);
 
 $('#logout')?.addEventListener('click', () => {
-  window.OUTING_SYNC?.client?.auth.signOut();
+  window.OUTING_LOCAL_LOGIN = true;
+  window.OUTING_SYNC?.client?.auth.signOut({ scope: 'local' }).catch((error) => console.warn('Gagal keluar dari Supabase:', error));
   session = null;
   currentPage = 'dashboard';
   closeMobileMenu();
@@ -1200,9 +1216,9 @@ $('#sync-diagnose')?.addEventListener('click', async () => {
     })));
     openReportDialog('Diagnosa Supabase', renderDiagnoseReport(report));
     if (report.ok) {
-      showToast('Supabase terhubung. Semua tabel dapat dibaca dan ditulis.');
+      showToast('Permintaan baca berhasil; RLS mungkin menyembunyikan baris. Tulis belum diuji.');
     } else {
-      showToast(`Ditemukan masalah di ${report.problems.length} tabel. Lihat detailnya di jendela diagnosa.`);
+      showToast(`${report.problems.length} tabel bermasalah saat dibaca. Lihat jendela diagnosa.`);
     }
   } catch (error) {
     console.error(error);
@@ -1213,19 +1229,40 @@ $('#sync-diagnose')?.addEventListener('click', async () => {
   }
 });
 
+$('#sync-load')?.addEventListener('click', async () => {
+  if (!session) return;
+  if (!window.OUTING_SYNC?.load) return showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+  if (!confirm('Muat data dari Supabase? Semua data lokal di browser ini, termasuk yang BELUM terupload, akan diganti. Batalkan jika belum membuat cadangan.')) return;
+  const button = $('#sync-load');
+  button.disabled = true;
+  button.textContent = '↓ Memuat...';
+  try {
+    const result = await window.OUTING_SYNC.load({ replaceLocal: true });
+    if (result?.ok && result.loaded) showToast('Data lokal diganti dengan data dari Supabase.');
+    else if (!result?.superseded) showToast(`Gagal memuat Supabase: ${result?.error?.message || 'periksa koneksi dan skema'}.`);
+  } finally {
+    button.disabled = false;
+    button.textContent = '↓ Muat dari Supabase';
+  }
+});
+
 $('#sync-now')?.addEventListener('click', async () => {
   if (!isAdmin()) return showToast('Hanya admin yang dapat upload data.');
-  if (!window.OUTING_SYNC?.queue) {
-    showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
-    return;
-  }
+  if (!window.OUTING_SYNC?.queue) return showToast('Supabase belum terhubung. Cek konfigurasi dan koneksi.');
+  if (!confirm('Upload akan mengirim seluruh data lokal ke enam tabel Supabase dan MENGHAPUS baris Supabase yang tidak ada di browser ini. Periksa data lokal sebelum melanjutkan. Upload sekarang?')) return;
   const button = $('#sync-now');
   button.disabled = true;
   button.textContent = '⟳ Mengupload...';
-  const result = await window.OUTING_SYNC.queue(db);
-  button.disabled = false;
-  button.textContent = '↻ Upload ke Supabase';
-  showSyncResult(result, 'Semua data berhasil diupload ke Supabase.');
+  try {
+    const result = await window.OUTING_SYNC.queue(db);
+    showSyncResult(result, 'Semua data berhasil diupload ke Supabase.');
+  } catch (error) {
+    console.error('Upload Supabase gagal:', error);
+    showToast('Upload gagal. Data lokal dipertahankan.');
+  } finally {
+    button.disabled = false;
+    button.textContent = '↻ Upload ke Supabase';
+  }
 });
 
 $('#data-form')?.addEventListener('submit', handleFormSubmit);
