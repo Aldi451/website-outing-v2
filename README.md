@@ -8,6 +8,12 @@ Website ringan untuk pengelolaan outing yang dapat dijalankan langsung di Infini
 - Mode lihat: `member` / `member`
 - Admin **online**: email/password yang dibuat di Supabase Authentication dengan `app_metadata.role = "admin"`.
 
+**Upload ditolak `permission denied` / `42501`?** Itu tandanya masih login lokal. Klik
+**↻ Upload ke Supabase**: aplikasi membuka panel **🔑 Bikin akun admin Supabase** yang
+berisi SQL dengan email Anda sudah terisi, tautan ke Users/SQL Editor project, dan form
+login admin yang langsung melanjutkan upload — tanpa keluar aplikasi dan tanpa kehilangan
+data lokal.
+
 Mode lihat (member) dapat membaca informasi outing, rundown, **daftar peserta lengkap di dashboard**, serta **rincian pembelian barang dan konsumsi beserta foto buktinya** — semuanya tanpa tombol tambah/edit/hapus. Perubahan bersama di Supabase hanya dapat dilakukan admin online; password lokal yang ada di JavaScript bukan pengaman database. Kalau rincian biaya/foto tidak boleh dilihat member, kembalikan `expenses` dan `consumption` ke `ADMIN_PAGES` di `app.js` dan beri kelas `admin-only` pada tombol navigasinya di `index.html`.
 
 ## Fitur
@@ -29,6 +35,7 @@ Mode lihat (member) dapat membaca informasi outing, rundown, **daftar peserta le
 - CSS fallback inline + guard anti-MIME di `index.html`, sehingga halaman tetap tampil rapi di hosting gratisan yang kadang mengirim file CSS sebagai `text/html`.
 - Sinkronisasi Supabase per tabel: nama tabel yang gagal dilaporkan, tanggal/angka dari Excel dinormalisasi sebelum upload, dan tombol **🩺 Cek Supabase** memeriksa skema secara *read-only* (tidak melakukan upload/hapus).
 - Setelah upload, muncul jendela **rincian per tabel** (terkirim / ditolak + sebabnya / dilewati karena kosong) dan tombol **ℹ Detail upload** + **📋 Salin detail**; dialog konfirmasi upload menyebut tabel yang akan dikirim beserta akun login yang dipakai.
+- Panel **🔑 Bikin akun admin Supabase**: saat upload dicoba dengan login lokal, aplikasi tidak mengirim permintaan yang pasti ditolak, melainkan menampilkan SQL `app_metadata.role = "admin"` dengan email Anda sudah terisi, tautan ke Users/SQL Editor, dan form login admin yang langsung mengupload.
 - Data demo tersedia lokal; perubahan disimpan di `localStorage` browser sampai berhasil diupload.
 
 ## Upload ke InfinityFree
@@ -71,7 +78,7 @@ Aplikasi membaca Supabase saat dibuka, tetapi **tidak otomatis mengirim data dem
 1. **Jangan hapus penyimpanan browser ini**: data yang belum terupload hanya ada di browser yang dipakai. Jika database sudah punya data penting, cadangkan juga data Supabase sebelum mengubah skema.
 2. Supabase → **SQL Editor** pada project yang benar → tempel dan jalankan **seluruh file [`supabase-schema.sql`](supabase-schema.sql)** versi terbaru. Ini membuat `rundown` dan `outing_categories`, menambah `participants.name` pada tabel lama (yang tidak dilakukan `CREATE TABLE IF NOT EXISTS`), melengkapi kolom lain, menyalakan RLS, serta memperbarui cache PostgREST. Aman diulang, tetapi versi default membuat nama + telepon peserta **bisa dibaca publik dengan anon key**. Bila perlu privasi, gunakan policy baca terbatas (OPSI 2); login member lokal tidak akan dapat memuat data online dan alur login untuk pembaca Supabase perlu disiapkan terpisah.
 3. Jalankan [`supabase-diagnose.sql`](supabase-diagnose.sql) di SQL Editor untuk melihat kolom/policy yang masih kurang. Jika tabel peserta lama berisi baris tanpa `name`, lengkapi nama asli dulu; migrasi sengaja tidak membuat nama palsu untuk baris itu.
-4. Supabase → **Authentication → Users → Add user**: buat akun dengan email dan password **baru**. Beri role admin dari SQL Editor — paling mudah jalankan seluruh isi [`supabase-set-admin.sql`](supabase-set-admin.sql) setelah mengganti email pada dua baris bertanda `<<< GANTI EMAIL DI SINI` (file itu SQL murni, tanpa meta-command psql seperti `\set` yang ditolak SQL Editor dengan error `42601: syntax error at or near "\"`). Hasilnya satu tabel verifikasi role + policy + grant. Atau jalankan manual query ini:
+4. Supabase → **Authentication → Users → Add user**: buat akun dengan email dan password **baru**, dan **centang "Auto Confirm User"** (konfirmasi email otomatis default-nya mati; kalau terlewat, login ditolak dengan `Email not confirmed`). Beri role admin dari SQL Editor — paling mudah pakai SQL dari panel **🔑** di aplikasi (email sudah terisi), atau jalankan seluruh isi [`supabase-set-admin.sql`](supabase-set-admin.sql) setelah mengganti email pada dua baris bertanda `<<< GANTI EMAIL DI SINI` (file itu SQL murni, tanpa meta-command psql seperti `\set` yang ditolak SQL Editor dengan error `42601: syntax error at or near "\"`). Hasilnya satu tabel verifikasi role + policy + grant. Atau jalankan manual query ini:
 
    ```sql
    update auth.users
@@ -89,3 +96,16 @@ Kalau masih gagal, lihat [`SUPABASE-TROUBLESHOOTING.md`](SUPABASE-TROUBLESHOOTIN
 ## Catatan penting
 
 Mode lokal menyimpan data per-browser/per-device. Artinya data yang ditambahkan dari satu perangkat belum otomatis terlihat di perangkat lain. Untuk data bersama online, sambungkan Supabase dengan RLS/policy yang benar.
+
+## Pengembangan
+
+Tidak ada build step untuk menjalankan aplikasinya, tetapi ada tes Node (tanpa dependensi)
+untuk logika sinkronisasi dan alur login/upload:
+
+```bash
+node --test tests/*.test.cjs        # 25 tes
+node tools/build-standalone.mjs --check   # gagal kalau file standalone belum di-rebuild
+```
+
+Setelah mengubah `index.html`, `styles.css`, `config.js`, `supabase-sync.js`, atau `app.js`,
+jalankan `node tools/build-standalone.mjs` supaya `outing-hub-standalone.html` ikut terbaru.

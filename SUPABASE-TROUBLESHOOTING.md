@@ -65,19 +65,40 @@ akun login yang sedang dipakai, sehingga jelas sebelum menekan Upload.
 aplikasi di browser. Keduanya **tidak** membuat session Supabase, sehingga server hanya
 melihat permintaan "anon" (pengunjung biasa) dan menolak tulis.
 
-Pesan yang muncul:
+Pesan yang muncul (dua-duanya berarti hal yang sama):
 
 ```
-new row violates row-level security policy for table "participants"   (code 42501)
+permission denied for table participants                                (code 42501)
+new row violates row-level security policy for table "participants"     (code 42501)
 ```
+
+Yang pertama berarti peran `anon` memang tidak punya GRANT tulis pada tabel itu
+(kondisi default schema ini); yang kedua berarti policy-nya yang menolak. Keduanya
+hilang dengan cara yang sama: login memakai akun Supabase yang punya
+`app_metadata.role = "admin"`.
 
 Semua tabel yang **skema dan kolomnya sudah ada** dapat ditolak saat tulis;
 tabel/kolom yang belum ada memberikan error berbeda. Login lokal tidak dapat menggantikan
 session email/password Supabase.
 
-**Solusi A (disarankan, aman):**
+**Cara tercepat sekarang: panel 🔑 di dalam aplikasi.** Klik **↻ Upload ke Supabase**
+saat masih login lokal — aplikasi tidak lagi mengirim enam permintaan yang pasti ditolak,
+melainkan membuka panel "Bikin akun admin Supabase" berisi:
+
+- SQL yang **sudah terisi email Anda** (isi dan verifikasinya sama dengan
+  `supabase-set-admin.sql`) + tombol **📋 Salin SQL**,
+- tautan langsung ke **Authentication → Users** dan **SQL Editor** project Anda,
+- form **login admin + upload** supaya tidak perlu keluar-masuk aplikasi.
+
+Panel yang sama bisa dibuka dari laporan upload (**🔑 Buka panel perbaikan upload**)
+dan dari hasil **🩺 Cek Supabase**.
+
+**Solusi A (disarankan, aman), langkah demi langkah:**
 
 1. Supabase → **Authentication → Users → Add user**, buat admin dengan email + password.
+   **Centang "Auto Confirm User"** — konfirmasi email otomatis (`mailer_autoconfirm`)
+   default-nya mati, jadi kalau kotak itu terlewat, login akan ditolak dengan
+   `Email not confirmed` dan aplikasi menampilkannya sebagai alasan tersendiri.
 2. Set `app_metadata` user tersebut (SQL Editor):
 
    ```sql
@@ -86,10 +107,10 @@ session email/password Supabase.
     where email = 'admin@domainanda.com';
    ```
 
-   Praktisnya: ganti email di `supabase-set-admin.sql` (dua baris bertanda
-   `<<< GANTI EMAIL DI SINI`, isinya sama), lalu jalankan **seluruh** isinya di
-   SQL Editor — file itu mengeset role admin sekaligus memverifikasi role, grant,
-   dan policy tulis keenam tabel dalam satu tabel hasil.
+   Praktisnya: pakai SQL dari panel 🔑 (email sudah terisi), atau ganti email di
+   `supabase-set-admin.sql` (dua baris bertanda `<<< GANTI EMAIL DI SINI`, isinya sama),
+   lalu jalankan **seluruh** isinya di SQL Editor — file itu mengeset role admin sekaligus
+   memverifikasi role, grant, dan policy tulis keenam tabel dalam satu tabel hasil.
 
    > **Error `42601: syntax error at or near "\"`?** Versi lama file itu memakai
    > `\set admin_email '...'`. `\set` adalah *meta-command* psql, bukan SQL, jadi
@@ -97,14 +118,17 @@ session email/password Supabase.
    > menolaknya. File versi sekarang sudah SQL murni tanpa `\set` — unduh/pakai
    > versi terbaru. Jangan menaruh baris apa pun yang diawali `\` di SQL Editor.
 
-3. Login di aplikasi memakai **email + password Supabase** itu (bukan `admin/power88`).
-   Kalau akun belum punya role admin, aplikasi akan menolak dengan pesan
-   "Akun Supabase ini belum memiliki role admin".
+3. Login memakai **email + password Supabase** itu (bukan `admin/power88`) — bisa langsung
+   dari form di panel 🔑, tanpa keluar dari aplikasi dan tanpa kehilangan data lokal.
+   Kalau akun belum punya role admin, aplikasi akan menolak login dan menampilkan SQL-nya.
 
 **Jangan gunakan login lokal sebagai solusi RLS.** OPSI 3 (anon write) di schema
 dinonaktifkan secara default: jika diaktifkan, **siapa pun** yang mengetahui anon key
 publik, bahkan tanpa login admin/power88, dapat mengubah/menghapus seluruh data peserta.
-Password lokal bukan pengaman database.
+Password lokal bukan pengaman database. (Setelah akun admin jadi, ada baiknya signup
+publik dimatikan di Authentication → Providers → Email supaya orang lain tidak bisa
+mendaftar sendiri; akun tanpa role admin tetap tidak bisa menulis.)
+
 
 ### 2. Policy RLS belum ada / masih versi lama
 
